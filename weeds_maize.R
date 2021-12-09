@@ -1273,8 +1273,11 @@ for (t in taxons){
   
   thresholds <- dismo::threshold(evaluate(extract(sps_preds_rstr, occs_i_shp), extract(sps_preds_rstr, bckgr))) # sensitibity default 0.9
   thresholds
+  #thresh2keep <- "sensitivity"     
+  thresh2keep <- "no_omission"     # keeping all presences
   #threshold2 <- as.numeric(thresholds$sensitivity)
-  threshold2 <- as.numeric(thresholds$no_omission) # keeping all presences
+  #threshold2 <- as.numeric(thresholds$no_omission) # keeping all presences
+  threshold2 <- as.numeric(thresholds[thresh2keep])
   threshold_used <- threshold2
   
   a <- c(0, threshold2, 0)
@@ -1292,7 +1295,8 @@ for (t in taxons){
   plot(occs_i_shp, add = TRUE, col = "black")
   plot(sps_preds_rstr, zlim = c(0, 1), main = "MaxEnt predictions (cloglog)", cex.main = 2, cex.sub = 1.5)
   plot(sps_preds_rstr_pres_abs, main = "Presence-Absence", 
-       sub = "Threshold: Sensitivity = 0.9", 
+       #sub = "Threshold: Sensitivity = 0.9", 
+       sub = paste0("Threshold: ", thresh2keep), 
        cex.main = 2, cex.sub = 1.5, legend = FALSE)
   title(list(paste0(sps),
              cex = 4), 
