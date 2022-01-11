@@ -224,6 +224,8 @@ head(weeds_maize)
 nrow(weeds_maize)
 
 occs_all <- fread(paste0(getwd(), "/../exploring_lucas_data/D5_FFGRCC_gbif_occ/sp_records_20210709.csv"), header = TRUE)
+if(nchar(occs_all$sp2[1]) == 7) occs_all[, sp2 := gsub(" ", "_", occs_all$species)]
+occs_all
 cols_order <- c("species", "decimalLatitude", "decimalLongitude", "gbifID", "countryCode", "year", "sp2")
 occs_all <- occs_all[, .SD, .SDcols = cols_order]
 occs_all <- occs_all[occs_all$species != "", ]
@@ -766,6 +768,7 @@ occs_00_indicators <- table(occs_00_indicators$species)
 occs_00_indicators <- sort(occs_00_indicators, decreasing = TRUE)
 occs_00_indicators
 write.csv(occs_00_indicators, file = "sp_indicators.csv", row.names = FALSE)
+occs_00_indicators <- fread("sp_indicators.csv", header = TRUE)
 
 # These are the "indicator species" and how many times they appear in pixels with maize (always class [0,0.1)):
 #
@@ -1036,6 +1039,16 @@ setnames(occs_all_4modelling, c("decimalLongitude", "decimalLatitude"), c("x", "
 occs_all_4modelling <- occs_all_4modelling[, .SD, .SDcols = c("species", "x", "y", "sp2")]
 occs_all_4modelling
 
+check_sp2 <- unique(occs_all[, .SD, .SDcols = c("species", "sp2")])
+#View(check_sp2)
+length(unique(check_sp2$species)) == length(unique(check_sp2$sp2))  # if FALSE, there are repeated sp2 codes for several species
+check_sp2$sp2[duplicated(check_sp2$sp2)]
+
+sort(unique(occs_all[sp2 == "tar_sub", species]))
+occs_all_4modelling[sp2 == "Galium_tricornutum", ]
+occs_all[sp2 == "Galium_tricornutum", ]
+
+
 length(weeds_maize$Species)                   # 204 weeds from the report
 length(unique(occs_all_4modelling$species))   # 156 weeds from report with occurrences
 nrow(occs_all_4modelling)                     # 2082796 occurrences for modelling (of 156 sps)
@@ -1069,7 +1082,8 @@ head(spcies)
 nrow(spcies)
 
 sps_excluded <- as.vector(tbl$Var1[!tbl$Var1 %in% spcies$sps]) # 16 species excluded
-sps_excluded[sps_excluded %in% names(occs_00_indicators)]      # of which 9 are species indicator (mostly "poor indicators", though)
+#sps_excluded[sps_excluded %in% names(occs_00_indicators)]      # of which 9 are species indicator (mostly "poor indicators", though)
+sps_excluded[sps_excluded %in% occs_00_indicators$Var1]      # of which 11 are species indicator (mostly "poor indicators", though)
 
 taxons <- spcies$taxons
 spcies
