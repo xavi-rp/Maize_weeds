@@ -19,7 +19,9 @@ if(Sys.info()[4] == "D01RI1700308") {
   wd <- ""
 }else if(Sys.info()[4] == "S-JRCIPRAP320P") {
   wd <- ""
-}else if(Sys.info()[4] %in% c("jeodpp-terminal-jd001-03", "jeodpp-terminal-03")) {
+}else if(Sys.info()[4] %in% c("jeodpp-terminal-jd001-03", 
+                              "jeodpp-terminal-03",
+                              "jeodpp-terminal-dev-12")) {
   if(!dir.exists("/eos/jeodpp/home/users/rotllxa/weeds/")) 
     dir.create("/eos/jeodpp/home/users/rotllxa/weeds/")
   wd <- "/eos/jeodpp/home/users/rotllxa/weeds/"
@@ -981,6 +983,74 @@ upset(fromList(sps_groups),
 dev.off()
 
 
+## Indicator species over CropMap ####
+occs_00_indicators
+sp_indic_1 <- occs_00_indicators[1, Var1] # best indicator sp 
+
+occs_all_2018_maiz_sf_laea
+occs_all_2018_maiz_sf_laea_indic1 <- occs_all_2018_maiz_sf_laea[occs_all_2018_maiz_sf_laea$species %in% sp_indic_1, ]
+occs_all_2018_maiz_sf_laea_indic1
+
+cropmap2018
+
+
+sp_indic_1_crop <- extract(cropmap2018, occs_all_2018_maiz_sf_laea_indic1, sp = TRUE)
+sp_indic_1_crop  
+
+sp_indic_1_crop_df <- data.frame(sp_indic_1_crop)
+sp_indic_1_crop_df
+cropmap_classes
+
+sp_indic_1_crop_df <- merge(sp_indic_1_crop_df, cropmap_classes, by.x = "EUCROPMAP_2018", by.y = "crop_categ", all.x = TRUE)
+table(sp_indic_1_crop_df$crop_names)
+
+
+cropmap2018_buff <- extract(cropmap2018, occs_all_2018_maiz_sf_laea_indic1, buffer = 1000, cellnumbers = TRUE)
+cropmap2018_buff
+dim(cropmap2018_buff[[1]])
+
+i <- 1
+set_distances <- c()
+for (i in 1:length(cropmap2018_buff)){
+#for (i in 4:4){
+  cropmap2018_buff_i <- as.data.table(cropmap2018_buff[[i]])
+  #print(sort(unique(cropmap2018_buff_i$value)))
+  #print(sum(unique(cropmap2018_buff_i$value) == 216, na.rm = TRUE))
+  if(sum(cropmap2018_buff_i$value == 216, na.rm = TRUE) > 0){
+    cropmap2018_buff_i <- cropmap2018_buff_i[cropmap2018_buff_i$value == 216, ]$cell
+    maize_cells <- xyFromCell(cropmap2018, cropmap2018_buff_i, spatial = TRUE)
+    dis_closest <- pointDistance(occs_all_2018_maiz_sf_laea_indic1[i, ], maize_cells, lonlat = FALSE, allpairs = TRUE)
+    dis_closest <- min(dis_closest)
+    #pdf("kk.pdf")
+    #plot(maize_cells, col = "red")
+    #plot(occs_all_2018_maiz_sf_laea_indic1[i, ], add = TRUE)
+    #scalebar(200, type = "bar", divs = 4)
+    #dev.off()
+  }else{
+    dis_closest <- NA
+  }
+  set_distances <- c(set_distances, dis_closest)
+  print(dis_closest)
+  
+}
+
+set_distances
+
+summary(set_distances)
+sd(set_distances, na.rm = TRUE)
+
+
+
+occs_all1 <- fread(paste0(getwd(), "/../exploring_lucas_data/D5_FFGRCC_gbif_occ/sp_records_20210709.csv"), header = TRUE)
+occs_all1 <- occs_all1[gbifID %in% occs_all_2018_maiz_sf_laea_indic1$gbifID]
+occs_all1
+
+dist2maize <- occs_all1[, .SD, .SDcols = c("gbifID", "species", "countryCode", "year", "coordinateUncertaintyInMeters")]
+dist2maize[, dist2maize := round(set_distances, 0)]
+dist2maize
+View(dist2maize)
+
+write.csv(dist2maize, "distance2maize_Galium_tricornutum.csv", row.names = FALSE)
 
 
 
