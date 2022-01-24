@@ -115,7 +115,6 @@ aggr_fun_1km <- function(x, ...) {     # returns share of maize at 1km (0 to 1)
   }else{
     mz_share <- sum(x == 216, na.rm = TRUE) / 10000
   }
-  
   return(mz_share)
 }
 
@@ -154,6 +153,33 @@ sum(cropmap2018_maiz_1km_vals > 0)
 summary(cropmap2018_maiz_1km_vals[cropmap2018_maiz_1km_vals > 0])
 quantile(cropmap2018_maiz_1km_vals[cropmap2018_maiz_1km_vals > 0], seq(0, 1, 0.1))
 quantile(cropmap2018_maiz_1km_vals[cropmap2018_maiz_1km_vals > 0], 0.47) # 47% of "maize pixels have less than 1% of maize
+
+
+
+## 10km
+aggr_fun_10km <- function(x, ...) {     # returns share of maize at 10km (0 to 1)
+  if (all(is.na(x))){
+    mz_share <- NA
+  }else{
+    mz_share <- sum(x == 216, na.rm = TRUE) / 10^6    # 10^6 10-m pixels in a 10-km pixel
+  }
+  return(mz_share)
+}
+
+t0 <- Sys.time()
+cropmap2018_maiz_10km <- aggregate(x = cropmap2018, 
+                                  fact = 1000,        # 10km
+                                  fun = aggr_fun_10km,  # 10km
+                                  expand = TRUE, 
+                                  na.rm = TRUE, 
+                                  #filename = "cropmap2018_maiz_10km.tif",
+                                  filename = "",
+                                  overwrite = TRUE)
+Sys.time() - t0
+
+cropmap2018_maiz_10km
+writeRaster(cropmap2018_maiz_10km, "cropmap2018_maiz_10km.tif", overwrite = TRUE)
+cropmap2018_maiz_10km <- raster("cropmap2018_maiz_10km.tif")
 
 
 ### Aggregating Arable and Non-Arable Land to 1km or 10km ####
@@ -983,7 +1009,7 @@ upset(fromList(sps_groups),
 dev.off()
 
 
-## Indicator species over CropMap ####
+## Indicator species over CropMap (distance) ####
 occs_00_indicators
 sp_indic_1 <- occs_00_indicators[1, Var1] # best indicator sp 
 
@@ -1156,6 +1182,7 @@ sps_excluded <- as.vector(tbl$Var1[!tbl$Var1 %in% spcies$sps]) # 16 species excl
 sps_excluded[sps_excluded %in% occs_00_indicators$Var1]      # of which 11 are species indicator (mostly "poor indicators", though)
 
 taxons <- spcies$taxons
+#spcies <- species[-c(1:which(species$taxons == "Phytolacca_americana") - 1), ]
 spcies
 taxons
 
@@ -1412,7 +1439,7 @@ for (t in taxons){
 }
 
 
-## Checking results ####
+### Checking results ####
 
 info_models <- read.csv("info_modelling_all_species.csv", header = TRUE)
 View(info_models)
@@ -1425,7 +1452,158 @@ mean(info_models$cbi.train)
 
 
 
+## EUCropMap against Agricultural Management Intensity Map (Rega et al., 2020) ####
+
+list.files("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/Rega")  ## Agricultural Management Intensity Map (Rega et al., 2020)
+
+raster("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/Rega/Crop_management_systems_dom50_def.tif")
+
+Absolute_intensity_5_clas_Fig3A <- raster("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/Rega/Fig3A-Absolute_intensity_5_clas_.tif/Absolute_intensity_5_clas_Fig3A.tif")
+Absolute_intensity_5_clas_Fig3A
+plot(Absolute_intensity_5_clas_Fig3A)
 
 
+
+Energy_input_2008_fille04_no_labour <- raster("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/Rega/Energy_input_raw data/Energy_input_2008_fille04_no_labour.tif")
+Energy_input_2008_fille04_no_labour
+
+
+## maize share aggregated at 1km from the Crop Map
+cropmap2018_maiz_1km
+
+cropmap2018_maiz_1km_vals <- getValues(cropmap2018_maiz_1km)
+summary(cropmap2018_maiz_1km_vals)
+rm(cropmap2018_maiz_1km_vals)
+
+# removing pixels with vals < 0.01 (1% of maize in the 10km pixel) to remove some noise
+cropmap2018_maiz_1km_clean <- cropmap2018_maiz_1km
+cropmap2018_maiz_1km_clean[cropmap2018_maiz_1km < 0.01] <- NA 
+
+plot(cropmap2018_maiz_1km_clean)
+cropmap2018_maiz_1km_clean_vals <- getValues(cropmap2018_maiz_1km_clean)
+summary(cropmap2018_maiz_1km_clean_vals)
+range(cropmap2018_maiz_1km_clean_vals, na.rm = TRUE)
+rm(cropmap2018_maiz_1km_clean_vals)
+
+
+## Comparing maize share (crop Map) with Rega's map (absolute intensity)
+
+cropmap2018_maiz_1km_clean 
+cropmap2018_maiz_1km_clean_1 <- crop(cropmap2018_maiz_1km_clean, Absolute_intensity_5_clas_Fig3A)
+
+extent(Absolute_intensity_5_clas_Fig3A) <- extent(cropmap2018_maiz_1km_clean_1)
+
+plot(Absolute_intensity_5_clas_Fig3A)
+plot(cropmap2018_maiz_1km_clean_1)
+
+
+## Plotting correlation (scatterplot)
+comp_df <- data.table(data.frame(getValues(Absolute_intensity_5_clas_Fig3A), getValues(cropmap2018_maiz_1km_clean_1)))
+comp_df
+sum(complete.cases(comp_df))
+comp_df <- comp_df[complete.cases(comp_df), 1:2]
+comp_df
+
+# Pearson's correlation coefficient
+comp_df_pearson <- cor(comp_df, method = "pearson")[2, 1]
+comp_df_pearson
+comp_df_pearson^2  # if we fit a linear regression (see below), this is R^2 (R squared)
+
+perc_subsample <- 10   # percentage of points for plotting
+perc_subsample <- 0.1   # percentage of points for plotting
+perc_subsample <- 1   # percentage of points for plotting
+
+num_subsample <- round((nrow(comp_df) * perc_subsample / 100), 0)
+comp_df_subsample <- comp_df[sample(nrow(comp_df), num_subsample), ]
+
+library(lattice)
+jpeg(paste0("comp_CropMapMaize_Rega3A.jpg"))
+xyplot(comp_df_subsample$getValues.Absolute_intensity_5_clas_Fig3A. ~ 
+         comp_df_subsample$getValues.cropmap2018_maiz_1km_clean_1., 
+       type = c("p", "r"),
+       col.line = "red",
+       xlab = "Maize share (Crop Map)",
+       ylab = "Absolute intensity of agrigultural management (Rega 3A)",
+       main = paste0("Pearson's r = ", as.character(round(comp_df_pearson, 4))),
+       sub = paste0("Plotting a random subsample of ", num_subsample, " (", perc_subsample, "%) points")
+)
+dev.off()
+
+
+
+## maize share aggregated at 1km from the Crop Map
+par(mfrow = c(1, 2))
+dev.off()
+
+cropmap2018_maiz_1km
+plot(cropmap2018_maiz_1km)
+
+cropmap2018_maiz_1km_vals <- getValues(cropmap2018_maiz_1km)
+summary(cropmap2018_maiz_1km_vals)
+rm(cropmap2018_maiz_1km_vals)
+
+# removing pixels with vals < 0.01 (1% of maize in the 1km pixel) to remove some noise
+cropmap2018_maiz_1km_clean <- cropmap2018_maiz_1km
+cropmap2018_maiz_1km_clean[cropmap2018_maiz_1km < 0.01] <- NA 
+
+plot(cropmap2018_maiz_1km_clean)
+cropmap2018_maiz_1km_clean_vals <- getValues(cropmap2018_maiz_1km_clean)
+summary(cropmap2018_maiz_1km_clean_vals)
+range(cropmap2018_maiz_1km_clean_vals, na.rm = TRUE)
+rm(cropmap2018_maiz_1km_clean_vals)
+
+
+
+## Comparing maize share (crop Map) with Rega's map (Energy_input_2008_fille04_no_labour)
+
+cropmap2018_maiz_1km_clean 
+cropmap2018_maiz_1km_clean_1 <- crop(cropmap2018_maiz_1km_clean, Energy_input_2008_fille04_no_labour)
+#cropmap2018_maiz_1km_clean_1 <- crop(cropmap2018_maiz_1km, Energy_input_2008_fille04_no_labour)
+
+extent(Energy_input_2008_fille04_no_labour) <- extent(cropmap2018_maiz_1km_clean_1)
+
+plot(Energy_input_2008_fille04_no_labour)
+plot(cropmap2018_maiz_1km_clean_1)
+
+
+## Plotting correlation (scatterplot)
+comp_df <- data.table(data.frame(getValues(Energy_input_2008_fille04_no_labour), getValues(cropmap2018_maiz_1km_clean_1)))
+comp_df
+sum(complete.cases(comp_df))
+comp_df <- comp_df[complete.cases(comp_df), 1:2]
+comp_df
+
+# Pearson's correlation coefficient
+comp_df_pearson <- cor(comp_df, method = "pearson")[2, 1]
+comp_df_pearson
+comp_df_pearson^2  # if we fit a linear regression (see below), this is R^2 (R squared)
+
+perc_subsample <- 10   # percentage of points for plotting
+perc_subsample <- 0.1   # percentage of points for plotting
+perc_subsample <- 1   # percentage of points for plotting
+
+num_subsample <- round((nrow(comp_df) * perc_subsample / 100), 0)
+comp_df_subsample <- comp_df[sample(nrow(comp_df), num_subsample), ]
+
+library(lattice)
+jpeg(paste0("comp_CropMapMaize_Energy_input_2008_fille04_no_labour.jpg"))
+xyplot(comp_df_subsample$getValues.Energy_input_2008_fille04_no_labour. ~ 
+         comp_df_subsample$getValues.cropmap2018_maiz_1km_clean_1., 
+       type = c("p", "r"),
+       col.line = "red",
+       xlab = "Maize share (Crop Map)",
+       ylab = "Energy_input_2008_fille04_no_labour",
+       main = paste0("Pearson's r = ", as.character(round(comp_df_pearson, 4))),
+       sub = paste0("Plotting a random subsample of ", num_subsample, " (", perc_subsample, "%) points")
+)
+dev.off()
+
+
+## Share of Arable/Non Arable land in Maize Pixels ####
+
+cropmap2018_maiz_1km
+cropmap2018_maiz_1km_clean
+
+cropmap2018_arabland_1km <- raster("cropmap2018_ArableLand_1km.tif")
 
 
