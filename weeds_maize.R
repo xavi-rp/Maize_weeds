@@ -211,6 +211,23 @@ aggr_ArabLand_1km <- function(x, ...) {     # returns share of Arable Land at 1k
   return(al_share)
 }
 
+aggr_ArabLand_10km <- function(x, ...) {     # returns share of Arable Land at 1km (0 to 1)
+  if (all(is.na(x))){
+    al_share <- NA
+  }else{
+    al_share <- sum(!x %in% c(100, # artificial
+                              300, # Woodland and Shrubland (incl. permanent crops)
+                              500, # Grasslands
+                              600, # Bare land
+                              800  # Wetlands
+    ), 
+    na.rm = TRUE) / 10^6    # 10^6 10-m pixels in a 10-km pixel
+  }
+  
+  return(al_share)
+}
+
+
 cropmap2018_arabland_1km <- aggregate(x = cropmap2018,
                                       #x = cropmap2018_cat,
                                       fact = 100,        # 1km
@@ -241,6 +258,17 @@ cropmap2018_maiz_1km$cropmap2018_arabland_1km <- getValues(cropmap2018_arabland_
 cropmap2018_maiz_1km
 
 summary(cropmap2018_maiz_1km$cropmap2018_arabland_1km)
+
+
+
+cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
+                                       fact = 1000,        # 10km
+                                       fun = aggr_ArabLand_10km, 
+                                       expand = TRUE, 
+                                       na.rm = TRUE, 
+                                       filename = "cropmap2018_ArableLand_10km.tif",
+                                       #filename = "",
+                                       overwrite = TRUE)
 
 
 
@@ -1555,6 +1583,7 @@ rm(cropmap2018_maiz_1km_clean_vals)
 
 
 ## Comparing maize share (crop Map) with Rega's map (Energy_input_2008_fille04_no_labour)
+#  This data comes from CAPRI and it is calculated as the 2008 baseline
 
 cropmap2018_maiz_1km_clean 
 cropmap2018_maiz_1km_clean_1 <- crop(cropmap2018_maiz_1km_clean, Energy_input_2008_fille04_no_labour)
@@ -1599,11 +1628,95 @@ xyplot(comp_df_subsample$getValues.Energy_input_2008_fille04_no_labour. ~
 dev.off()
 
 
+
 ## Share of Arable/Non Arable land in Maize Pixels ####
 
 cropmap2018_maiz_1km
-cropmap2018_maiz_1km_clean
+cropmap2018_maiz_1km_clean  # maize share > 0.01 (1%)
 
 cropmap2018_arabland_1km <- raster("cropmap2018_ArableLand_1km.tif")
+plot(cropmap2018_arabland_1km)
+
+comp_df <- data.table(data.frame(getValues(cropmap2018_arabland_1km), getValues(cropmap2018_maiz_1km_clean)))
+#comp_df <- data.table(data.frame(getValues(cropmap2018_arabland_1km), getValues(cropmap2018_maiz_1km)))  # keeping all maize pixels
+comp_df
+sum(complete.cases(comp_df))
+comp_df <- comp_df[complete.cases(comp_df), 1:2]
+comp_df
+
+
+summary(comp_df$getValues.cropmap2018_arabland_1km.)  # maize share > 0.01 (1%)
+#   Min. 1st Qu.  Median    Mean  3rd Qu.    Max. 
+# 0.0101  0.1953  0.4241  0.4463  0.6752  1.0000 
+
+# keeping all maize pixels
+# Min.   1st Qu.  Median    Mean  3rd Qu.    Max. 
+# 0.0000  0.0464  0.2522  0.3439  0.5986  1.0000 
+
+
+
+
+## Share of arable land in pixels with indicator species ####
+dist2maize <- fread("distance2maize_Galium_tricornutum.csv")
+
+occs_all1 <- fread(paste0(getwd(), "/../exploring_lucas_data/D5_FFGRCC_gbif_occ/sp_records_20210709.csv"), header = TRUE)
+occs_all1
+
+occs_all1_galium_tricornutum <- occs_all1[species == "Galium tricornutum" & year == 2018, ]
+occs_all1_galium_tricornutum
+
+occs_all1_galium_tricornutum <- st_as_sf(as.data.frame(occs_all1_galium_tricornutum), coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)#, agr = "constant")
+occs_all1_galium_tricornutum
+
+
+occs_all1_galium_tricornutum <- st_transform(occs_all1_galium_tricornutum, crs = crs(cropmap2018_arabland_1km))
+occs_all1_galium_tricornutum
+
+share_arable_galium_tricornutum <- as.data.table(extract(cropmap2018_arabland_1km, occs_all1_galium_tricornutum, sp = TRUE))
+share_arable_galium_tricornutum  
+
+summary(share_arable_galium_tricornutum$cropmap2018_ArableLand_1km)
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.01880 0.08445 0.19575 0.26499 0.34490 0.97720 
+
+
+share_arable_galium_tricornutum_1 <- share_arable_galium_tricornutum[, .SD, .SDcols = c("gbifID", "cropmap2018_ArableLand_1km")]
+dist2maize <- merge(dist2maize, share_arable_galium_tricornutum_1, by = "gbifID")
+dist2maize
+
+# 10 km
+share_arable_galium_tricornutum <- as.data.table(extract(cropmap2018_arabland_10km, occs_all1_galium_tricornutum, sp = TRUE))
+share_arable_galium_tricornutum  
+
+summary(share_arable_galium_tricornutum$cropmap2018_ArableLand_10km)
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#  
+
+share_arable_galium_tricornutum_10 <- share_arable_galium_tricornutum[, .SD, .SDcols = c("gbifID", "cropmap2018_ArableLand_10km")]
+dist2maize <- merge(dist2maize, share_arable_galium_tricornutum_10, by = "gbifID")
+dist2maize
+
+write.csv(dist2maize, "distance2maize_Galium_tricornutum.csv", row.names = FALSE)
+
+
+# boxplot
+par(mfrow = c(1, 3))
+
+boxplot(dist2maize$dist2maize, 
+        main = "",
+        xlab = "", 
+        ylab = "Distance to maize")
+
+boxplot(dist2maize$cropmap2018_ArableLand_1km, 
+        main = "",
+        xlab = "", 
+        ylab = "Share of arable land (1km)")
+
+boxplot(dist2maize$cropmap2018_ArableLand_10km, 
+        main = "",
+        xlab = "", 
+        ylab = "Share of arable land (10km)")
+
+dev.off()
 
 
