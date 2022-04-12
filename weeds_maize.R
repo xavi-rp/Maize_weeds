@@ -12,6 +12,14 @@ install_github("xavi-rp/PreSPickR",
                ref = "v2", 
                INSTALL_opts = c("--no-multiarch"))  # https://github.com/rstudio/renv/issues/162
 library(PreSPickR)
+library(ENMeval)
+library(raster)
+library(dplyr)
+library(dismo)
+library(data.table)
+library(virtualspecies)
+library(terra)
+
 
 #sessionInfo()
 
@@ -182,6 +190,35 @@ writeRaster(cropmap2018_maiz_10km, "cropmap2018_maiz_10km.tif", overwrite = TRUE
 cropmap2018_maiz_10km <- raster("cropmap2018_maiz_10km.tif")
 
 
+
+## 16km
+aggr_fun_16km <- function(x, ...) {     # returns share of maize at 16km (0 to 1)
+  if (all(is.na(x))){
+    mz_share <- NA
+  }else{
+    mz_share <- sum(x == 216, na.rm = TRUE) / 2560000    # 2560000 (1600*1600) 10-m pixels in a 16-km pixel 
+  }
+  return(mz_share)
+}
+
+t0 <- Sys.time()
+cropmap2018_maiz_16km <- aggregate(x = cropmap2018, 
+                                   fact = 1600,        # 16km
+                                   fun = aggr_fun_16km,  # 16km
+                                   expand = TRUE, 
+                                   na.rm = TRUE, 
+                                   #filename = "cropmap2018_maiz_16km.tif",
+                                   filename = "",
+                                   overwrite = TRUE)
+Sys.time() - t0
+
+cropmap2018_maiz_16km
+writeRaster(cropmap2018_maiz_16km, "cropmap2018_maiz_16km.tif", overwrite = TRUE)
+cropmap2018_maiz_16km <- raster("cropmap2018_maiz_16km.tif")
+cropmap2018_maiz_16km
+
+
+
 ### Aggregating Arable and Non-Arable Land to 1km or 10km ####
 
 aggr_NonAL_1km <- function(x, ...) {     # returns share of Non-Arable Land at 1km (0 to 1)
@@ -270,7 +307,7 @@ cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
                                        #filename = "",
                                        overwrite = TRUE)
 
-
+cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km.tif")
 
 
 ## Maize weeds ####
@@ -365,6 +402,7 @@ setkeyv(occs_maizeShare, "cells")
 occs_maizeShare
 
 # Removing repeated occurrences (same sp) in the same pixel, because we want to work with Species Richness
+occs_maizeShare_abundances <- occs_maizeShare
 occs_maizeShare <- occs_maizeShare[!duplicated(occs_maizeShare[, c("species", "cells")]), ]
 
 
@@ -468,6 +506,9 @@ coef(lm(occs_maizeShare_1$N ~ occs_maizeShare_1$cropmap2018_maiz_1km))
 
 
 
+
+
+## Sp richness aggregated by maize share class 
 
 occs_maizeShare_1[, maize_share_class := cut(occs_maizeShare_1$cropmap2018_maiz_1km,
                                              breaks = seq(0, 1, 0.1),
@@ -707,6 +748,58 @@ coef(modl)
 
 pears_cor_2 <- cor(occs_maizeShare_1$N_all, occs_maizeShare_1$cropmap2018_maiz_1km, method = "pearson") # Eur: -0.042
 pears_cor_2
+
+
+
+
+## Sp Richness vs Maize share over Arable land 
+
+occs_maizeShare_1[, cropmap2018_maizArable_1km := round(cropmap2018_maiz_1km / cropmap2018_arabland_1km, 3)]
+sum(is.na(occs_maizeShare_1$N))
+sum(is.na(occs_maizeShare_1$cropmap2018_maizArable_1km))
+sum(is.na(occs_maizeShare_1$cropmap2018_maiz_1km))
+sum(is.na(occs_maizeShare_1$cropmap2018_arabland_1km))
+occs_maizeShare_1[is.na(occs_maizeShare_1$cropmap2018_maizArable_1km), ]
+sum(is.nan(occs_maizeShare_1$cropmap2018_maizArable_1k))
+occs_maizeShare_1$cropmap2018_maizArable_1km[is.nan(occs_maizeShare_1$cropmap2018_maizArable_1km)] <- 0
+occs_maizeShare_1[occs_maizeShare_1$cells == 14790069, ]
+occs_maizeShare_1 <- occs_maizeShare_1[, c(1:4, 6)]
+
+
+pdf("scatterplot_SpRichness_maizeArable.pdf")
+plot(y = occs_maizeShare_1$N,  # x
+     #x = occs_maizeShare_1$EUCROPMAP_2018, # y
+     #x = occs_maizeShare_1$cropmap2018_maiz_1km_cat, # y
+     x = occs_maizeShare_1$cropmap2018_maizArable_1k, # y
+     main = "",
+     ylab = "Species richness", 
+     xlab = "Maize share / Arable Land share", 
+     pch = 19)
+abline(lm(occs_maizeShare_1$N ~ occs_maizeShare_1$cropmap2018_maizArable_1km), col = "red") # regression line (y~x)
+
+pears_cor <- cor(occs_maizeShare_1$N, occs_maizeShare_1$cropmap2018_maizArable_1km, method = "pearson")
+mtext(paste0("Pearson's r = ", round(pears_cor, 3)),
+      col = "black",
+      side = 1, line = 3, 
+      adj = 1,
+      cex = 0.8)
+
+lregr <- summary(lm(occs_maizeShare_1$N ~ occs_maizeShare_1$cropmap2018_maizArable_1km))
+lregr$adj.r.squared
+mtext(paste0("R-squared = ", round(lregr$r.squared, 3)),
+      col = "red",
+      side = 1, line = 2, 
+      adj = 1,
+      cex = 0.8)
+
+dev.off()
+
+
+coef(lm(occs_maizeShare_1$N ~ occs_maizeShare_1$cropmap2018_maizArable_1km))
+
+
+
+
 
 
 
@@ -1039,7 +1132,13 @@ dev.off()
 
 ## Indicator species over CropMap (distance) ####
 occs_00_indicators
-sp_indic_1 <- occs_00_indicators[1, Var1] # best indicator sp 
+sp_indic_1 <- occs_00_indicators[1, Var1] # best indicator sp (Galium tricornutum)
+#sp_indic_1 <- occs_00_indicators[2, Var1] # 2nd best indicator sp (Digitaria ischaemum)
+#sp_indic_1 <- occs_00_indicators[3, Var1] # 3rd best indicator sp (Xanthium spinosum)
+
+sp_indic_1 <- "Abutilon theophrasti"  # species very resistant (appearing in all maize share clases)
+sp_indic_1 <- occs_00_indicators[8, Var1]  # Cyperus rotundus; another sp. indicator
+
 
 occs_all_2018_maiz_sf_laea
 occs_all_2018_maiz_sf_laea_indic1 <- occs_all_2018_maiz_sf_laea[occs_all_2018_maiz_sf_laea$species %in% sp_indic_1, ]
@@ -1060,7 +1159,7 @@ table(sp_indic_1_crop_df$crop_names)
 
 
 cropmap2018_buff <- extract(cropmap2018, occs_all_2018_maiz_sf_laea_indic1, buffer = 1000, cellnumbers = TRUE)
-cropmap2018_buff
+#cropmap2018_buff
 dim(cropmap2018_buff[[1]])
 
 i <- 1
@@ -1104,7 +1203,8 @@ dist2maize[, dist2maize := round(set_distances, 0)]
 dist2maize
 View(dist2maize)
 
-write.csv(dist2maize, "distance2maize_Galium_tricornutum.csv", row.names = FALSE)
+#write.csv(dist2maize, "distance2maize_Galium_tricornutum.csv", row.names = FALSE)
+write.csv(dist2maize, paste0("distance2maize_", gsub(" ", "_", sp_indic_1), ".csv"), row.names = FALSE)
 
 
 
@@ -1462,6 +1562,7 @@ for (t in taxons){
   #write.csv(info_models, "info_modelling_all_species.csv", row.names = FALSE)
   #write.csv(info_models, "info_modelling_all_species_085.csv", row.names = FALSE)
   write.csv(info_models, "info_modelling_all_species.csv", row.names = FALSE)
+  #info_models <- fread("info_modelling_all_species.csv", header = TRUE)
   
   print(paste0(t, " run in: ", running_time))
 }
@@ -1471,11 +1572,241 @@ for (t in taxons){
 
 info_models <- read.csv("info_modelling_all_species.csv", header = TRUE)
 View(info_models)
+info_models
 
 mean(info_models$auc.val.avg)
 mean(info_models$auc.train)
 mean(info_models$cbi.val.avg)
 mean(info_models$cbi.train)
+
+
+
+
+## Species richness adjusted to potential richness ####
+
+length(info_models$species)
+taxons <- info_models$species
+
+#t <- taxons[1]
+
+
+spat_data_dir <- "/eos/jeodpp/home/users/rotllxa/European_butterflies_SDMs_data/"
+worldclim_all <- raster(paste0(spat_data_dir, "worldclim_all.tif"))
+worldclim_all_data <- fread(paste0(spat_data_dir, "worldclim_all_data.csv"), header = TRUE)
+worldclim_all_data <- worldclim_all_data[complete.cases(worldclim_all_data), ]
+worldclim_all_data
+
+
+sp_potential_richness_rstr <- worldclim_all[[1]]
+names(sp_potential_richness_rstr) <- "potential_richness"
+sp_potential_richness_rstr <- setValues(sp_potential_richness_rstr, 0)
+sp_potential_richness_rstr
+
+
+for (t in taxons){
+  print(t)
+  print(Sys.time())
+  sp_dir <- paste0(getwd(), "/models_", t, "/")
+  
+  load(paste0(sp_dir, "models_", t, ".RData"), verbose = FALSE)
+  modl
+  
+  results <- eval.results(modl)
+  results
+  #View(results)
+  optimal <- results %>% filter(delta.AICc == 0)
+  optimal
+  if(nrow(optimal) > 1) optimal <- optimal[1, ]
+  
+  modl <- modl@models[[optimal$tune.args]]
+  
+  sps_predictions_maxent <- dismo::predict(object = modl, 
+                                           newdata = worldclim_all_data, 
+                                           clamp = TRUE,
+                                           type = c("cloglog")
+                                           )
+  
+  
+  worldclim_all_data0 <- as.data.table(as.data.frame(worldclim_all[[1]]))
+  worldclim_all_data0$raster_position <- 1:nrow(worldclim_all_data0)
+  
+  worldclim_all_data1 <- worldclim_all_data0
+  worldclim_all_data1 <- worldclim_all_data1[complete.cases(worldclim_all_data1), ]
+  
+  worldclim_all_data0 <- worldclim_all_data0[, .SD, .SDcols = "raster_position"]
+  
+  worldclim_all_data1[, predictions := sps_predictions_maxent[, 1]]
+  
+  worldclim_all_data0 <- merge(worldclim_all_data0[, "raster_position", with = FALSE], 
+                               worldclim_all_data1[, .SD, .SDcols = c("raster_position", "predictions")], 
+                               by = "raster_position", all.x = TRUE)
+  
+  sps_preds_rstr <- worldclim_all[[1]]
+  sps_preds_rstr <- setValues(sps_preds_rstr, worldclim_all_data0$predictions)
+  
+  
+  threshold2 <- info_models[info_models$species == t, "threshold_used"]
+  
+  a <- c(0, threshold2, 0)
+  b <- c(threshold2, 1, 1)
+  thr <- rbind(a, b)
+  
+  sps_preds_rstr_pres_abs <- reclassify(sps_preds_rstr, rcl = thr, filename = '', include.lowest = FALSE, right = TRUE)
+  
+  
+  make_plots <- "yes"
+  make_plots <- "no"
+  if(make_plots == "yes"){
+    pdf(paste0(sp_dir, "sps_predictions_maxent_", t, "_kk.pdf"), width = 18, height = 15)
+    par(mar = c(6, 8, 6, 8), oma = c(4,0,8,0))
+    par(mfrow = c(2, 2))
+    plot(sps_preds_rstr, zlim = c(0, 1), main = "Occurrences (GBIF - 1km)", cex.main = 2, cex.sub = 1.5, legend = FALSE)
+    #plot(occs_i_shp, add = TRUE, col = "black")
+    plot(sps_preds_rstr, zlim = c(0, 1), main = "MaxEnt predictions (cloglog)", cex.main = 2, cex.sub = 1.5)
+    plot(sps_preds_rstr_pres_abs, main = "Presence-Absence", 
+         sub = paste0("Threshold: '", threshold2, "'"), 
+         cex.main = 2, cex.sub = 1.5, legend = FALSE)
+    title(list(paste0(t),
+               cex = 4), 
+          line = 1, outer = TRUE)
+    
+    dev.off()
+    
+  }
+  
+  sp_potential_richness_rstr <- sp_potential_richness_rstr + sps_preds_rstr_pres_abs
+}
+
+
+sp_potential_richness_rstr
+writeRaster(sp_potential_richness_rstr, "sp_potential_richness.tif", overwrite = TRUE)
+
+pdf(paste0("sp_potential_richness", ".pdf")
+    #, width = 18, height = 15
+    )
+plot(sp_potential_richness_rstr)
+dev.off()
+#
+
+#pdf(paste0("cropmap2018_maiz_1km", ".pdf"))
+#plot(cropmap2018_maiz_1km)
+#dev.off()
+
+
+sp_potential_richness_rstr <- brick("sp_potential_richness.tif")
+sp_potential_richness_rstr
+
+
+
+sp_potential_richness_rstr_laea <- projectRaster(sp_potential_richness_rstr, to = cropmap2018_maiz_1km)
+writeRaster(sp_potential_richness_rstr_laea, "sp_potential_richness_rstr_laea.tif", overwrite = TRUE)
+
+pdf(paste0("sp_potential_richness_rstr_laea", ".pdf"))
+plot(sp_potential_richness_rstr_laea)
+dev.off()
+
+
+
+
+
+
+length(unique(occs_maizeShare$species)) # 150 sp
+sps_excluded     # 16 species excluded of modelling because of less than 50 occurences
+
+sum(unique(occs_maizeShare$species) %in% weeds_maize$Species)
+sum(weeds_maize$Species %in% unique(occs_maizeShare$species) )
+sum(sps_excluded %in% unique(occs_maizeShare$species))
+sum(!unique(occs_maizeShare$species) %in% sps_excluded)
+
+length(unique(occs_all_4modelling$species))
+
+spcies
+nrow(spcies)
+
+sum(spcies$sps %in% unique(occs_maizeShare$species))
+sum(spcies$Freq >= 50)
+
+sum(table(occs_maizeShare$species) >= 50)
+sum(table(occs_maizeShare$species) < 50)
+
+# We modelled the distribution of 140 sp. 
+# We have 156 sp with data (2000-2021; coords uncert < 50m), out of the 204 weeds
+# Out of the 156, we have 140 sp with >= 50 occurrences, which can be modelled
+# Therefore, our richness potential for the whole community would be 140. But acording to the models,
+# each pixel might have a lower potential
+
+occs_maizeShare
+# For 2018, out of the 156 sp, we have 150 sp with some data, from which 104 with >= 50 occurrences (but this is not relevant now)
+# We have a little mismatch here, to keep it mind: in some pixels it could be more sp (150) than the maximum potential (140)
+
+sp_potential_richness_rstr_laea
+
+sp_potential_richness <- as.data.table(extract(sp_potential_richness_rstr_laea, unique(occs_maizeShare$cells)))
+sp_potential_richness
+sum(is.na(sp_potential_richness))
+sum(!is.na(sp_potential_richness))
+
+sp_potential_richness$V1 <- round(sp_potential_richness$V1, 0)
+sp_potential_richness[, cells := unique(occs_maizeShare$cells)]
+sp_potential_richness
+setnames(sp_potential_richness, "V1", "potential_richness")
+sp_potential_richness
+
+
+occs_maizeShare_1 <- occs_maizeShare[, .SD, .SDcols = c("cells", "cropmap2018_maiz_1km")]
+#occs_maizeShare_1 <- occs_maizeShare[, 6:9]
+occs_maizeShare_1[!duplicated(occs_maizeShare_1$cells), ]
+
+occs_maizeShare_1 <- unique(occs_maizeShare_1, by = "cells")
+
+occs_maizeShare_1 <- merge(occs_maizeShare_1, occs_maizeShare_aggr, by.x = "cells", by.y = "V1", all.x = TRUE)
+occs_maizeShare_1
+
+occs_maizeShare_1 <- merge(occs_maizeShare_1, sp_potential_richness, by = "cells", all.x = TRUE)
+occs_maizeShare_1
+
+occs_maizeShare_1[, adjusted_richness := (N / potential_richness)]
+occs_maizeShare_1
+
+occs_maizeShare_1 <- occs_maizeShare_1[complete.cases(occs_maizeShare_1), ]
+
+summary(occs_maizeShare_1$adjusted_richness)
+
+## Assessing correlations
+
+pdf("scatterplot_SpRichness_potential_maize.pdf")
+plot(y = occs_maizeShare_1$adjusted_richness,  # x
+     #x = occs_maizeShare_1$EUCROPMAP_2018, # y
+     #x = occs_maizeShare_1$cropmap2018_maiz_1km_cat, # y
+     x = occs_maizeShare_1$cropmap2018_maiz_1km, # y
+     main = "",
+     ylab = "Adjusted Species Richness", 
+     xlab = "Maize share", 
+     pch = 19)
+abline(lm(occs_maizeShare_1$adjusted_richness ~ occs_maizeShare_1$cropmap2018_maiz_1km), col = "red") # regression line (y~x)
+
+pears_cor <- cor(occs_maizeShare_1$adjusted_richness, occs_maizeShare_1$cropmap2018_maiz_1km, method = "pearson")
+mtext(paste0("Pearson's r = ", round(pears_cor, 3)),
+      col = "black",
+      side = 1, line = 3, 
+      adj = 1,
+      cex = 0.8)
+
+lregr <- summary(lm(occs_maizeShare_1$adjusted_richness ~ occs_maizeShare_1$cropmap2018_maiz_1km))
+lregr$adj.r.squared
+mtext(paste0("R-squared = ", round(lregr$r.squared, 3)),
+      col = "black",
+      side = 1, line = 2, 
+      adj = 1,
+      cex = 0.8)
+
+dev.off()
+
+
+
+
+
+
 
 
 
@@ -1629,6 +1960,76 @@ dev.off()
 
 
 
+
+
+## EUCropMap against N and P fertilizer consumption ####
+
+list.files("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/dataRestoration/N_fert_consumption/")  
+NMINSL <- raster("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/dataRestoration/N_fert_consumption/NMINSL.tif")  # N
+NMINSL  # 16km grid
+
+
+list.files("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/dataRestoration/P_fert_2018/")  
+PMINSL_20181 <- raster("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/dataRestoration/P_fert_2018/PMINSL_20181.tif")  # P
+PMINSL_20181   # 14 km grid
+
+
+
+cropmap2018_maiz_16km
+
+# removing pixels with vals < 0.01 (1% of maize in the 16km pixel) to remove some noise
+cropmap2018_maiz_16km_clean <- cropmap2018_maiz_16km
+cropmap2018_maiz_16km_clean[cropmap2018_maiz_16km < 0.01] <- NA 
+
+cropmap2018_maiz_16km_clean_1 <- crop(cropmap2018_maiz_16km_clean, NMINSL)
+#cropmap2018_maiz_16km_clean_1 <- crop(cropmap2018_maiz_16km, NMINSL)
+
+cropmap2018_maiz_16km_clean_1 <- resample(cropmap2018_maiz_16km_clean_1, NMINSL, method="bilinear")
+#extent(NMINSL) <- extent(cropmap2018_maiz_16km_clean_1)
+
+plot(NMINSL)
+plot(cropmap2018_maiz_16km_clean_1)
+
+
+## Plotting correlation (scatterplot)
+comp_df <- data.table(data.frame(getValues(NMINSL), getValues(cropmap2018_maiz_16km_clean_1)))
+comp_df
+sum(complete.cases(comp_df))
+comp_df <- comp_df[complete.cases(comp_df), 1:2]
+comp_df
+
+# Pearson's correlation coefficient
+comp_df_pearson <- cor(comp_df, method = "pearson")[2, 1]
+comp_df_pearson
+comp_df_pearson^2  # if we fit a linear regression (see below), this is R^2 (R squared)
+
+perc_subsample <- 10   # percentage of points for plotting
+perc_subsample <- 0.1   # percentage of points for plotting
+perc_subsample <- 1   # percentage of points for plotting
+perc_subsample <- 100   # percentage of points for plotting
+
+num_subsample <- round((nrow(comp_df) * perc_subsample / 100), 0)
+comp_df_subsample <- comp_df[sample(nrow(comp_df), num_subsample), ]
+
+library(lattice)
+jpeg(paste0("comp_CropMapMaize_NMINSL.jpg"))
+xyplot(comp_df_subsample$getValues.NMINSL. ~ 
+         comp_df_subsample$getValues.cropmap2018_maiz_16km_clean_1., 
+       type = c("p", "r"),
+       col.line = "red",
+       xlab = "Maize share (Crop Map)",
+       ylab = "NMINSL (N fertilizer consumption)",
+       main = paste0("Pearson's r = ", as.character(round(comp_df_pearson, 4))),
+       sub = paste0("Plotting a random subsample of ", num_subsample, " (", perc_subsample, "%) points")
+)
+dev.off()
+
+
+
+
+
+
+
 ## Share of Arable/Non Arable land in Maize Pixels ####
 
 cropmap2018_maiz_1km
@@ -1658,11 +2059,13 @@ summary(comp_df$getValues.cropmap2018_arabland_1km.)  # maize share > 0.01 (1%)
 
 ## Share of arable land in pixels with indicator species ####
 dist2maize <- fread("distance2maize_Galium_tricornutum.csv")
+dist2maize <- fread(paste0("distance2maize_", gsub(" ", "_", sp_indic_1), ".csv"))
 
 occs_all1 <- fread(paste0(getwd(), "/../exploring_lucas_data/D5_FFGRCC_gbif_occ/sp_records_20210709.csv"), header = TRUE)
 occs_all1
 
-occs_all1_galium_tricornutum <- occs_all1[species == "Galium tricornutum" & year == 2018, ]
+#occs_all1_galium_tricornutum <- occs_all1[species == "Galium tricornutum" & year == 2018, ]
+occs_all1_galium_tricornutum <- occs_all1[species %in% sp_indic_1 & year == 2018, ]
 occs_all1_galium_tricornutum
 
 occs_all1_galium_tricornutum <- st_as_sf(as.data.frame(occs_all1_galium_tricornutum), coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)#, agr = "constant")
@@ -1676,47 +2079,184 @@ share_arable_galium_tricornutum <- as.data.table(extract(cropmap2018_arabland_1k
 share_arable_galium_tricornutum  
 
 summary(share_arable_galium_tricornutum$cropmap2018_ArableLand_1km)
-#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.     # Galium tricornutum
 # 0.01880 0.08445 0.19575 0.26499 0.34490 0.97720 
+
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's  # Digitaria ischaemum
+# 0.0558  0.2130  0.4322  0.4131  0.5777  0.8482       1 
+
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's   # Xanthium spinosum
+# 0.0007  0.0741  0.1677  0.2162  0.3790  0.4564       4 
+
+
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's   # Abutilon hteophrasti (no indicator; appearing in all maize share classes)
+#  0.0049  0.2723  0.4601  0.4551  0.6249  0.9641      30 
+
+#   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's    # Cyperus rotundus (indicator; monocot; 7 occs on maize) 
+#  0.1904  0.2915  0.3930  0.3773  0.4211  0.6327       1  
+
 
 
 share_arable_galium_tricornutum_1 <- share_arable_galium_tricornutum[, .SD, .SDcols = c("gbifID", "cropmap2018_ArableLand_1km")]
 dist2maize <- merge(dist2maize, share_arable_galium_tricornutum_1, by = "gbifID")
 dist2maize
 
+
 # 10 km
 share_arable_galium_tricornutum <- as.data.table(extract(cropmap2018_arabland_10km, occs_all1_galium_tricornutum, sp = TRUE))
 share_arable_galium_tricornutum  
 
 summary(share_arable_galium_tricornutum$cropmap2018_ArableLand_10km)
-#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-#  
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.       # Galium tricornutum
+# 0.02225 0.10723 0.21178 0.25930 0.34203 0.99267
+# Just slightly differences if we compare with shares of Arable land in 1km grid
+
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    # Digitria ischaemum
+# 0.08361 0.29676 0.60073 0.52435 0.73646 0.95515 
+
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's   # Xanthium spinosum
+# 0.02275 0.07621 0.25351 0.22916 0.34817 0.38236       4 
+
+
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's   # Abutilon
+# 0.02282 0.28626 0.44538 0.43223 0.56448 0.91718      29 
+
+#    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.     #  Cyperus rotundus (indicator; monocot; 7 occs on maize) 
+#  0.2717  0.6396  0.7779  0.6955  0.8217  0.9763 
+
 
 share_arable_galium_tricornutum_10 <- share_arable_galium_tricornutum[, .SD, .SDcols = c("gbifID", "cropmap2018_ArableLand_10km")]
 dist2maize <- merge(dist2maize, share_arable_galium_tricornutum_10, by = "gbifID")
-dist2maize
+View(dist2maize)
 
-write.csv(dist2maize, "distance2maize_Galium_tricornutum.csv", row.names = FALSE)
+#write.csv(dist2maize, "distance2maize_Galium_tricornutum.csv", row.names = FALSE)
+write.csv(dist2maize, paste0("distance2maize_", gsub(" ", "_", sp_indic_1), ".csv"), row.names = FALSE)
 
 
-# boxplot
+summary(dist2maize$dist2maize)   # distance to the center of the closest maize pixel (1km)
+#  Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's    # Galium tricornutum
+#  33.0   248.5   446.0   477.1   773.5   969.0       3 
+
+# Min. 1st Qu.  Median    Mean  3rd Qu.    Max.   # Digitaria 
+# 12.00   36.25   59.00   97.65  110.75  626.00 
+
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's   # Xanthium spinosum
+# 22.0   120.2   360.0   369.2   518.0   915.0       7 
+
+
+#   Min.  1st Qu.   Median     Mean  3rd Qu.     Max.     NA's     # Abutilon theophrasti
+#   1.00   16.00    45.00     92.59  103.00    827.00      49 
+
+#   Min.  1st Qu.  Median    Mean 3rd Qu.    Max.    NA's     # Cyperus rotundus (indicator; monocot; 7 occs on maize) 
+#  204.0   391.0   413.0   499.6   504.0   986.0       3 
+
+
+## boxplot
+#sp_indic_1 <- occs_00_indicators[1, Var1] # best indicator sp (Galium tricornutum)
+#sp_indic_1 <- occs_00_indicators[2, Var1] # 2nd best indicator sp (Digitaria ischaemum)
+#sp_indic_1 <- occs_00_indicators[3, Var1] # 3rd best indicator sp (Xanthium spinosum)
+
+dist2maize <- fread(paste0("distance2maize_", gsub(" ", "_", sp_indic_1), ".csv"))
+
+#jpeg("dist2maize_maizeShare_Galium_tricornutum.jpg", width = 10, height = 6, units = "cm", res = 300)
+jpeg(paste0("distance2maize_", gsub(" ", "_", sp_indic_1), ".jpg"), width = 10, height = 6, units = "cm", res = 300)
 par(mfrow = c(1, 3))
 
-boxplot(dist2maize$dist2maize, 
+boxplot(dist2maize$dist2maize,
+        ylim = c(0, 1000),
         main = "",
         xlab = "", 
-        ylab = "Distance to maize")
+        ylab = "Distance to maize (m)")
 
 boxplot(dist2maize$cropmap2018_ArableLand_1km, 
+        ylim = c(0, 1),
         main = "",
         xlab = "", 
         ylab = "Share of arable land (1km)")
 
 boxplot(dist2maize$cropmap2018_ArableLand_10km, 
+        ylim = c(0, 1),
         main = "",
         xlab = "", 
         ylab = "Share of arable land (10km)")
 
+#title(expression(paste(italic("Galium tricornutum"), " occurrences")), line = - 2, outer = TRUE)
+title(bquote(paste(italic(.(sp_indic_1)), " occurrences")), line = - 2, outer = TRUE)
+
 dev.off()
 
+
+
+
+## All sps. together
+sps <- c(occs_00_indicators[c(1:3, 8), Var1], "Abutilon theophrasti")
+sps
+
+dist2maize_1 <- fread(paste0("distance2maize_", gsub(" ", "_", sps[1]), ".csv"))
+
+for (s in sps[-1]) {
+  dist2maize <- fread(paste0("distance2maize_", gsub(" ", "_", s), ".csv"))
+  dist2maize_1 <- rbind(dist2maize_1, dist2maize)
+}
+
+dist2maize_1
+
+dist2maize_1$species <- factor(dist2maize_1$species, unique(dist2maize_1$species))
+
+library("RColorBrewer")
+display.brewer.pal(n = length(unique(dist2maize_1$species)), name = 'RdBu')
+
+library("viridis")
+library("scales")
+colrs <- viridis_pal()(length(unique(dist2maize_1$species)))
+#colrs <- viridis_pal()(2)
+show_col(colrs)
+#my_colrs <- ifelse(levels(dist2maize_1$species) %in% sps[1:4], colrs[1],
+#                   colrs[2])
+
+
+jpeg(paste0("distance2maize_", "all", ".jpg"), width = 15, height = 12, units = "cm", res = 300)
+par(mfrow = c(2, 2), mar = c(2, 5, 2, 2))
+
+boxplot(dist2maize_1$dist2maize ~ dist2maize_1$species,
+        ylim = c(0, 1000),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Distance to maize (m)",
+        xaxt = 'n', 
+        ann = TRUE)
+
+plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
+legend("center", 
+       #legend = c("Indicator species","Not Indicator sps."), 
+       legend = unique(dist2maize_1$species), 
+       col = c(colrs),
+       bty = "n", 
+       pch=20 , pt.cex = 3, cex = 1, 
+       horiz = FALSE)#, 
+#inset = - 1)
+
+
+boxplot(dist2maize_1$cropmap2018_ArableLand_1km  ~ dist2maize_1$species, 
+        ylim = c(0, 1),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Share of arable land (1km)",
+        xaxt = 'n', 
+        ann = TRUE)
+
+boxplot(dist2maize_1$cropmap2018_ArableLand_10km ~ dist2maize_1$species, 
+        ylim = c(0, 1),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Share of arable land (10km)",
+        xaxt = 'n', 
+        ann = TRUE)
+
+#par(xpd = TRUE)
+
+dev.off()
 
