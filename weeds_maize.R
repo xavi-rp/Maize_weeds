@@ -1285,8 +1285,8 @@ for (sp in sp_indic_1){
   
 }
 
-
-
+#dist2maize <- fread("distance2maize_all_50sp.csv", header = TRUE)
+#dist2maize
 
 
 
@@ -2370,4 +2370,73 @@ axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sp
 #par(xpd = TRUE)
 
 dev.off()
+
+
+
+## Some results for reporting
+dist2maize
+
+dist2maize_indicators <- dist2maize[!species %in% sp_NoIndic, ]
+unique(dist2maize_indicators$species)
+
+dist2maize_no_indicators <- dist2maize[species %in% sp_NoIndic, ]
+unique(dist2maize_no_indicators$species)
+
+
+names(dist2maize_indicators)
+
+sum(is.na(dist2maize_indicators$dist2maize))
+length(dist2maize_indicators$dist2maize)
+
+round(mean(dist2maize_indicators$dist2maize, na.rm = TRUE), 0)
+round(sd(dist2maize_indicators$dist2maize, na.rm = TRUE), 0)
+round(mean(dist2maize_indicators$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(sd(dist2maize_indicators$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(mean(dist2maize_indicators$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+round(sd(dist2maize_indicators$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+
+round(mean(dist2maize_no_indicators$dist2maize, na.rm = TRUE), 0)
+round(sd(dist2maize_no_indicators$dist2maize, na.rm = TRUE), 0)
+round(mean(dist2maize_no_indicators$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(sd(dist2maize_no_indicators$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(mean(dist2maize_no_indicators$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+round(sd(dist2maize_no_indicators$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+
+
+# first 5 indicators
+first_5 <- c("Galium tricornutum", "Digitaria ischaemum", "Xanthium spinosum", "Chrozophora tinctoria", "Caucalis platycarpos")
+
+dist2maize_5 <- dist2maize[species %in% first_5, ]
+
+round(mean(dist2maize_5$dist2maize, na.rm = TRUE), 0)
+round(sd(dist2maize_5$dist2maize, na.rm = TRUE), 0)
+round(mean(dist2maize_5$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(sd(dist2maize_5$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(mean(dist2maize_5$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+round(sd(dist2maize_5$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+
+# Galium
+dist2maize_galium <- dist2maize[species %in% c("Galium tricornutum"), ]
+round(mean(dist2maize_galium$dist2maize, na.rm = TRUE), 0)
+round(sd(dist2maize_galium$dist2maize, na.rm = TRUE), 0)
+round(mean(dist2maize_galium$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(sd(dist2maize_galium$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(mean(dist2maize_galium$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+round(sd(dist2maize_galium$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+
+# Digitaria ischaemum
+dist2maize_digitaria <- dist2maize[species %in% c("Digitaria ischaemum"), ]
+round(mean(dist2maize_digitaria$dist2maize, na.rm = TRUE), 0)
+round(sd(dist2maize_digitaria$dist2maize, na.rm = TRUE), 0)
+round(mean(dist2maize_digitaria$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(sd(dist2maize_digitaria$cropmap2018_ArableLand_1km, na.rm = TRUE), 2)
+round(mean(dist2maize_digitaria$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+round(sd(dist2maize_digitaria$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
+
+
+
+
+
+
+
 
