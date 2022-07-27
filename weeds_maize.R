@@ -347,9 +347,23 @@ occs_all_2018_maiz <- occs_all_2018[occs_all_2018$species %in% weeds_maiz_gbib, 
 
 nrow(occs_all_2018_maiz)   # 158427 occurrences for 2018
 nrow(occs_all_2018)        # over 1591221 in total for 2018
+occs_all_2018_maiz
 
 sum(occs_all_2018_maiz$countryCode == "ES")
 sum(occs_all_2018_maiz$countryCode == "FR")
+occs_all_2018_maiz_fr <- occs_all_2018_maiz[occs_all_2018_maiz$countryCode == "FR", ]
+occs_all_2018_maiz_fr
+sort(table(occs_all_2018_maiz_fr$species))
+
+sps_subset <- c("Digitaria sanguinalis", "Erodium cicutarium", "Beta vulgaris", "Phytolacca americana")
+#occs_00_indicators <- fread("sp_indicators.csv", header = TRUE)
+#sps_subset <- occs_00_indicators$Var1
+  
+sort(table(occs_all_2018_maiz_fr[occs_all_2018_maiz_fr$species %in% sps_subset, ]$species))
+occs_all_2018_maiz_fr_subset <- occs_all_2018_maiz_fr[occs_all_2018_maiz_fr$species %in% sps_subset, ]
+occs_all_2018_maiz_fr_subset
+write.csv(occs_all_2018_maiz_fr_subset, "occurrences_weeds_gbif_FR_2018_subset.csv", row.names = FALSE)
+
 
 
 setnames(occs_all_2018_maiz, c("decimalLongitude", "decimalLatitude"), c("x", "y"))
@@ -1004,7 +1018,7 @@ occs_00_indicators <- fread("sp_indicators.csv", header = TRUE)
 
 
 # For the other species in class 0, not "indicators"
-# These appear many more times
+# These appear in many other classes
 
 occs_00_NotIndicators <- occs_00[!occs_00$species %in% sp_00_notOthers, ]
 occs_00_NotIndicators <- table(occs_00_NotIndicators$species)
@@ -1035,6 +1049,37 @@ sum(sp_00 %in% "Atriplex patula")
 sum(sp_00 %in% "Silene noctiflora")
 sum(sp_00 %in% sp_01_notOthers)   # 9 ??????
 sp_01_notOthers[!sp_01_notOthers %in% sp_00]   # "Fumaria schleicheri" is only in group 1 (not in group 0!)
+
+
+# for sps in class 0 nand 1
+occs_00_01 <- occs_maizeShare[occs_maizeShare$maiz_share_class %in% c("[0,0.1)", "[0.1,0.2)"), ]
+length(unique(occs_00$species))
+
+occs_01 <- occs_00_01[occs_00_01$species %in% sp_01_notOthers, ]
+occs_01
+unique(occs_01$species)
+occs_01 <- table(occs_01$species)
+occs_01 <- sort(occs_01, decreasing = TRUE)
+occs_01
+write.csv(occs_01, file = "sp_sensitive_class00_01.csv", row.names = FALSE)
+occs_01 <- fread("sp_sensitive_class00_01.csv", header = TRUE)
+occs_01$Freq
+occs_01$Var1
+
+
+
+# for sps in class 0.8-0.9 (the most tolerant; they appear in most of the other classes too, although some species in not all)
+occs_08 <- occs_maizeShare[occs_maizeShare$species  %in% sp_08, ]
+occs_08
+unique(occs_08$species)
+sort(unique(occs_08$maiz_share_class))
+occs_08 <- table(occs_08$species)
+occs_08 <- sort(occs_08, decreasing = TRUE)
+occs_08
+write.csv(occs_08, file = "sp_tolerant_class00_08.csv", row.names = FALSE)
+occs_08 <- fread("sp_tolerant_class00_08.csv", header = TRUE)
+occs_08$Freq
+occs_08$Var1
 
 
 
@@ -1215,6 +1260,12 @@ sp_NoIndic <- names(sp_NoIndic)[1:25]  # selecting those 25 not indicator sp wit
 sp_indic_1 <- c(sp_indic_1, sp_NoIndic)  # all maize weeds; first, indicator sp
 #sp_indic_1 <- sp_indic_1[38:length(sp_indic_1)]
 
+#sp_indic_1 <- occs_01$Var1   # sps in classes 0-0.1 and 0.1-0.2 
+#sp_indic_1 <- c(sp_indic_1, occs_01$Var1)
+#sp_indic_1_kk <- sp_indic_1
+#sp_indic_1 <- c(occs_08$Var1)
+
+
 for (sp in sp_indic_1){
   print(sp)
   occs_all_2018_maiz_sf_laea
@@ -1286,7 +1337,7 @@ for (sp in sp_indic_1){
 }
 
 #dist2maize <- fread("distance2maize_all_50sp.csv", header = TRUE)
-#dist2maize
+dist2maize
 
 
 
@@ -2223,6 +2274,7 @@ dist2maize
 #write.csv(dist2maize, "distance2maize_Galium_tricornutum.csv", row.names = FALSE)
 write.csv(dist2maize, paste0("distance2maize_", gsub(" ", "_", sp_indic_1), ".csv"), row.names = FALSE)
 #write.csv(dist2maize, paste0("distance2maize_", gsub(" ", "_", "all_50sp"), ".csv"), row.names = FALSE)
+#write.csv(dist2maize, paste0("distance2maize_", gsub(" ", "_", "all_40sp"), ".csv"), row.names = FALSE)
 
 
 summary(dist2maize$dist2maize)   # distance to the center of the closest maize pixel (1km)
@@ -2285,6 +2337,7 @@ dev.off()
 sps <- c(occs_00_indicators[c(1:3, 8), Var1], "Abutilon theophrasti")
 sps <- c(occs_00_indicators[, Var1], "Abutilon theophrasti")
 #sps <- sp_indic_1
+#sps <- c(sp_indic_1_kk, sp_indic_1)
 sps
 
 dist2maize_1 <- fread(paste0("distance2maize_", gsub(" ", "_", sps[1]), ".csv"))
@@ -2297,12 +2350,14 @@ for (s in sps[-1]) {
 dist2maize_1
 #dist2maize_1 <- dist2maize
 #dist2maize_1 <- fread("distance2maize_all_50sp.csv", header = TRUE)
+#length(unique(dist2maize_1$species))
+#identical(sort(unique(dist2maize_1$species)), sort(sp_indic_1))
 
 #dist2maize_1$species <- factor(dist2maize_1$species, unique(dist2maize_1$species))
 dist2maize_1$species <- factor(dist2maize_1$species, sps)
 
-library("RColorBrewer")
-display.brewer.pal(n = length(unique(dist2maize_1$species)), name = 'RdBu')
+#library("RColorBrewer")
+#display.brewer.pal(n = length(unique(dist2maize_1$species)), name = 'RdBu')
 
 library("viridis")
 library("scales")
@@ -2314,6 +2369,7 @@ show_col(colrs)
 
 
 jpeg(paste0("distance2maize_", "all_50sp", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+#jpeg(paste0("distance2maize_", "all_40sp", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
 par(mfrow = c(2, 2), mar = c(2, 5, 2, 2))
 
 boxplot(dist2maize_1$dist2maize ~ dist2maize_1$species,
@@ -2326,9 +2382,13 @@ boxplot(dist2maize_1$dist2maize ~ dist2maize_1$species,
         #cex.axis = 0.7,
         #at = c(1:25, 27:51),
         at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:25, 27:36, 38:42),
         ann = TRUE)
 axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
 mtext("Indicator Species                      Non-indicator Species", side = 3)
+#mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
+
 
 plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
 legend("center", 
@@ -2342,12 +2402,13 @@ legend("center",
 #inset = - 1)
 
 
-boxplot(dist2maize_1$cropmap2018_ArableLand_1km  ~ dist2maize_1$species, 
-        ylim = c(0, 1),
+#boxplot(dist2maize_1$cropmap2018_ArableLand_1km  ~ dist2maize_1$species, 
+boxplot(dist2maize_1$cropmap2018_maiz_1km  ~ dist2maize_1$species, 
+        ylim = c(0, 0.2),
         col = colrs,
         main = "",
         xlab = "", 
-        ylab = "Share of arable land (scale: 1km)",
+        ylab = "Share of maize (scale: 1km)",
         xaxt = 'n', 
         at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
         ann = TRUE)
@@ -2355,12 +2416,12 @@ mtext("Indicator Species                      Non-indicator Species", side = 3)
 axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
 
 
-boxplot(dist2maize_1$cropmap2018_ArableLand_10km ~ dist2maize_1$species, 
+boxplot(dist2maize_1$cropmap2018_ArableLand_1km ~ dist2maize_1$species, 
         ylim = c(0, 1),
         col = colrs,
         main = "",
         xlab = "", 
-        ylab = "Share of arable land (scale: 10km)",
+        ylab = "Share of arable land (scale: 1km)",
         xaxt = 'n', 
         at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
         ann = TRUE)
@@ -2583,11 +2644,13 @@ sps
 dist2maize_1 <- dist2maize
 #dist2maize_1 <- fread("distance2maize_all_50sp.csv", header = TRUE)
 
+length(unique(dist2maize_1$species))
+
 #dist2maize_1$species <- factor(dist2maize_1$species, unique(dist2maize_1$species))
 dist2maize_1$species <- factor(dist2maize_1$species, sps)
 
-library("RColorBrewer")
-display.brewer.pal(n = length(unique(dist2maize_1$species)), name = 'RdBu')
+#library("RColorBrewer")
+#display.brewer.pal(n = length(unique(dist2maize_1$species)), name = 'RdBu')
 
 library("viridis")
 library("scales")
@@ -2599,6 +2662,8 @@ show_col(colrs)
 
 
 jpeg(paste0("distance2maize_", "all_50sp_MaizeShare", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+#jpeg(paste0("distance2maize_", "all_40sp", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+
 par(mfrow = c(2, 2), mar = c(2, 5, 2, 2))
 
 boxplot(dist2maize_1$dist2maize ~ dist2maize_1$species,
@@ -2610,10 +2675,14 @@ boxplot(dist2maize_1$dist2maize ~ dist2maize_1$species,
         xaxt = 'n', 
         #cex.axis = 0.7,
         #at = c(1:25, 27:51),
-        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        at = c(1:25, 27:36, 38:42),
         ann = TRUE)
-axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
-mtext("Indicator Species                      Non-indicator Species", side = 3)
+#axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#mtext("Indicator Species                      Non-indicator Species", side = 3)
+axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
+
 
 plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
 legend("center", 
@@ -2628,29 +2697,36 @@ legend("center",
 
 
 boxplot(dist2maize_1$cropmap2018_maiz_1km  ~ dist2maize_1$species, 
-        ylim = c(0, 0.2),
+        #ylim = c(0, 0.2),
+        ylim = c(0, 0.15),
         col = colrs,
         main = "",
         xlab = "", 
         ylab = "Share of maize (scale: 1km)",
         xaxt = 'n', 
-        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        at = c(1:25, 27:36, 38:42),
         ann = TRUE)
-mtext("Indicator Species                      Non-indicator Species", side = 3)
-axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#mtext("Indicator Species                      Non-indicator Species", side = 3)
+#axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
 
 
-boxplot(dist2maize_1$cropmap2018_maiz_10km ~ dist2maize_1$species, 
-        ylim = c(0, 0.2),
+boxplot(dist2maize_1$cropmap2018_ArableLand_1km ~ dist2maize_1$species, 
+        ylim = c(0, 1),
         col = colrs,
         main = "",
         xlab = "", 
-        ylab = "Share of maize (scale: 10km)",
+        ylab = "Share of arable land (scale: 1km)",
         xaxt = 'n', 
-        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        at = c(1:25, 27:36, 38:42),
         ann = TRUE)
-mtext("Indicator Species                      Non-indicator Species", side = 3)
-axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#mtext("Indicator Species                      Non-indicator Species", side = 3)
+#axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
 
 
 #par(xpd = TRUE)
@@ -2719,9 +2795,311 @@ round(sd(dist2maize_digitaria$cropmap2018_maiz_1km, na.rm = TRUE), 3)     # 0.03
 round(mean(dist2maize_digitaria$cropmap2018_maiz_10km, na.rm = TRUE), 3)    # 0.029
 round(sd(dist2maize_digitaria$cropmap2018_maiz_10km, na.rm = TRUE), 3)      # 0.021
 
+# Digitaria ischaemum
+dist2maize_xanthium <- dist2maize[species %in% c("Xanthium spinosum"), ]
+round(mean(dist2maize_xanthium$dist2maize, na.rm = TRUE), 0)
+round(sd(dist2maize_xanthium$dist2maize, na.rm = TRUE), 0)
+round(mean(dist2maize_xanthium$cropmap2018_maiz_1km, na.rm = TRUE), 3)   # 0.004
+round(sd(dist2maize_xanthium$cropmap2018_maiz_1km, na.rm = TRUE), 3)     # 0.01
+round(mean(dist2maize_xanthium$cropmap2018_maiz_10km, na.rm = TRUE), 3)    # 0.029
+round(sd(dist2maize_xanthium$cropmap2018_maiz_10km, na.rm = TRUE), 3)      # 0.021
 
 
 
+
+
+
+
+
+## Validation with LPIS for FR ####
+
+cropmap2018 <- raster("/mnt/cidstorage/cidportal/data/OpenData/EUCROPMAP/2018/EUCROPMAP_2018.tif")  # at 10m
+cropmap2018
+
+
+fr_coords <-  c(3100000, 4300000, 2200000, 3400000)   # France (LAEA, m) (xmin, xmax, ymin, ymax)
+fr_coords <-  c(3232000, 4284000, 2073000, 3134000)   # France (LPIS Martin)
+
+
+
+
+# LPIS 
+library(RPostgreSQL)
+library(sf)
+
+drv <- dbDriver("PostgreSQL")
+connec <- dbConnect(drv, 
+                    dbname = "refocus_gsaa_db",
+                    host = "jeodb01.cidsn.jrc.it", 
+                    port = 54321,
+                    user = "refocus_gsaa_user_ro", 
+                    password = "K2Xo5RcDPQ")
+
+
+#maize_fr_2018_db <- dbGetQuery(connec, "SELECT * FROM cropdiversity.maize_fr_2018")
+#str(maize_fr_2018_db)
+
+
+## LPIS. Maize fields
+
+maize_fr_2018 <- st_read(connec, query = "SELECT * FROM cropdiversity.maize_fr_2018")
+maize_fr_2018
+
+#pdf("lpis_FR_2018.pdf")
+#plot(x)
+#dev.off()
+
+
+## LPIS. Maize aggregated 1km
+
+croparea_maize_fr_1k_2018 <- st_read(connec, query = "SELECT * FROM cropdiversity.croparea_maize_fr_1k_2018")
+croparea_maize_fr_1k_2018
+range(croparea_maize_fr_1k_2018$area)   # area is maize share in ‰ (per mile; to be divided by 10^4 to get %) 
+summary(croparea_maize_fr_1k_2018$area) / 10000 
+#    Min. 1st Qu.  Median    Mean  3rd Qu.    Max. 
+#   0.000   2.645   7.458  11.247  16.164  100.000 
+
+
+
+# How many occs in FR?
+occs_all_2018_maiz_fr <- occs_all_2018_maiz[occs_all_2018_maiz$countryCode == "FR", ]
+occs_all_2018_maiz_fr
+
+occs_00_indicators <- fread("sp_indicators.csv", header = TRUE)
+occs_00_indicators
+
+occs_all_2018_maiz_fr_indic <- occs_all_2018_maiz_fr[species %in% occs_00_indicators$Var1, ]
+table(occs_all_2018_maiz_fr_indic$species)
+
+
+
+## Distance to maize field and tolerance to maize share
+
+occs_all_2018_maiz_sf_laea
+st_crs(occs_all_2018_maiz_sf_laea)
+st_crs(maize_fr_2018)
+
+occs_all_2018_maiz_sf_laea2 <- st_transform(occs_all_2018_maiz_sf_laea, crs = st_crs(maize_fr_2018))
+occs_all_2018_maiz_sf_laea2
+
+
+#sp_indic_1 <- occs_00_indicators$Var1
+
+occs_all_2018_maiz_sf_laea_indic1 <- occs_all_2018_maiz_sf_laea2[occs_all_2018_maiz_sf_laea2$species %in% sp_indic_1, ]
+occs_all_2018_maiz_sf_laea_indic1 <- occs_all_2018_maiz_sf_laea_indic1[occs_all_2018_maiz_sf_laea_indic1$countryCode == "FR", ]
+occs_all_2018_maiz_sf_laea_indic1
+length(unique(occs_all_2018_maiz_sf_laea_indic1$species))  # 33 sp in FR
+
+
+set_distances_tol_all <- c()
+
+for (s in sp_indic_1){
+  print(s)
+  
+  occs_all_2018_maiz_sf_laea_indic1_2 <- occs_all_2018_maiz_sf_laea_indic1[occs_all_2018_maiz_sf_laea_indic1$species %in% s, ]
+  
+  t0 <- Sys.time()
+  closest_field <- apply(st_distance(occs_all_2018_maiz_sf_laea_indic1_2, maize_fr_2018), 1, min)
+  print(Sys.time() - t0)
+  
+  head(closest_field)
+  length(closest_field)
+  
+  
+  cols2save <- c("species", "gbifID", "countryCode", "year")
+  set_distances_tol <- as.data.frame(occs_all_2018_maiz_sf_laea_indic1_2)[, cols2save]
+  
+  set_distances_tol$closest_field <- round(closest_field, 0)
+  
+  
+  #maize_share <- st_intersection(croparea_maize_fr_1k_2018, occs_all_2018_maiz_sf_laea_indic1_2)
+  t0 <- Sys.time()
+  maize_share <- st_intersection(croparea_maize_fr_1k_2018, occs_all_2018_maiz_sf_laea_indic1_2)
+  print(Sys.time() - t0)
+  
+  
+  maize_share <- as.data.frame(maize_share)[, c("gbifID", "area")]
+  maize_share$area <- round(maize_share$area / 1000000, 3)  # this is in share (0-1)
+  
+  set_distances_tol <- merge(set_distances_tol, maize_share, all.x = TRUE, by = "gbifID")
+  set_distances_tol[is.na(set_distances_tol$area), "area"] <- 0
+  
+  
+  names(set_distances_tol) <- gsub("area", "maize_share", names(set_distances_tol))
+  set_distances_tol
+  
+  
+  set_distances_tol_all <- rbind(set_distances_tol_all, set_distances_tol)
+  write.csv(set_distances_tol_all, paste0("distance2maize_LPIS_FR_all", ".csv"), row.names = FALSE)
+  gc()
+  
+}
+
+#set_distances_tol_all <- read.csv(paste0("distance2maize_LPIS_FR_all", ".csv"), header = TRUE)
+set_distances_tol_all
+length(unique(set_distances_tol_all$species))
+unique(set_distances_tol_all$species)
+table(set_distances_tol_all$species)
+
+
+set_distances_tol <- set_distances_tol_all[set_distances_tol_all$closest_field <= 1000, ]
+nrow(set_distances_tol_all)
+nrow(set_distances_tol)
+
+
+summary(set_distances_tol$closest_field)
+sd(set_distances_tol$closest_field, na.rm = TRUE)
+  
+summary(set_distances_tol$maize_share)
+sd(set_distances_tol$maize_share, na.rm = TRUE)
+  
+  
+
+
+## some checks
+#sort(unique(dist2maize$countryCode))
+#sort(unique(dist2maize$species))
+#sort(unique(dist2maize[countryCode == "FR", ]$species))
+#(unique(dist2maize[countryCode == "FR", ]$species))
+#
+#dist2maize[species == "Galium tricornutum" & countryCode == "FR", ]
+#set_distances_tol[set_distances_tol$species == "Galium tricornutum", ]
+#
+#
+#occs_all_2018_maiz_sf_laea2_kk <- occs_all_2018_maiz_sf_laea2[occs_all_2018_maiz_sf_laea2$species == "Galium tricornutum", ]
+#st_write(occs_all_2018_maiz_sf_laea2_kk, paste0("occs_all_2018_maiz_sf_laea2_kk", ".shp"), delete_layer = TRUE) 
+
+
+## Plots
+
+head(set_distances_tol_all)
+set_distances_tol_all$species <- factor(set_distances_tol_all$species, sps)
+set_distances_tol$species <- factor(set_distances_tol$species, sps)
+
+
+jpeg(paste0("distance2maize_", "all_LPIS_FR", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+#jpeg(paste0("distance2maize_", "all_below1km_LPIS_FR", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+
+par(mfrow = c(2, 2), mar = c(2, 5, 2, 2))
+
+boxplot(set_distances_tol_all$closest_field ~ set_distances_tol_all$species,
+#boxplot(set_distances_tol$closest_field ~ set_distances_tol$species,
+        #ylim = c(0, 1000),
+        ylim = c(0, 25000),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Distance to maize (m)",
+        xaxt = 'n', 
+        #cex.axis = 0.7,
+        #at = c(1:25, 27:51),
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:25, 27:36, 38:42),
+        ann = TRUE)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+#mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
+
+
+plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
+legend("center", 
+       #legend = c("Indicator species","Not Indicator sps."), 
+       legend = paste0(1:length(sps), "-", levels(dist2maize_1$species)), 
+       col = c(colrs),
+       ncol = 3,
+       bty = "n", 
+       pch=20 , pt.cex = 3, cex = 0.8, 
+       horiz = FALSE)#, 
+#inset = - 1)
+
+
+#boxplot(set_distances_tol$maize_share  ~ set_distances_tol$species, 
+boxplot(set_distances_tol_all$maize_share  ~ set_distances_tol_all$species, 
+        ylim = c(0, 0.2),
+        #ylim = c(0, 0.1),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Share of maize (scale: 1km)",
+        xaxt = 'n', 
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        ann = TRUE)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+
+#boxplot(set_distances_tol$cropmap2018_ArableLand_1km ~ set_distances_tol$species, 
+#boxplot(set_distances_tol_all$cropmap2018_ArableLand_1km ~ set_distances_tol_all$species, 
+#        ylim = c(0, 1),
+#        col = colrs,
+#        main = "",
+#        xlab = "", 
+#        ylab = "Share of arable land (scale: 1km)",
+#        xaxt = 'n', 
+#        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+#        ann = TRUE)
+#mtext("Indicator Species                      Non-indicator Species", side = 3)
+#axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+
+#par(xpd = TRUE)
+
+dev.off()
+
+
+
+## Some results for reporting
+set_distances_tol_all <- data.table(set_distances_tol_all)
+set_distances_tol <- data.table(set_distances_tol)
+
+set_distances_tol_all_indicators <- set_distances_tol_all[!species %in% sp_NoIndic, ]
+unique(set_distances_tol_all_indicators$species)
+
+set_distances_tol_all_no_indicators <- set_distances_tol_all[species %in% sp_NoIndic, ]
+unique(set_distances_tol_all_no_indicators$species)
+
+
+names(set_distances_tol_all_indicators)
+
+sum(is.na(set_distances_tol_all_indicators$set_distances_tol_all))
+length(set_distances_tol_all_indicators$closest_field)
+
+
+set_distances_tol_indicators <- set_distances_tol[!species %in% sp_NoIndic, ]
+unique(set_distances_tol_indicators$species)
+
+set_distances_tol_no_indicators <- set_distances_tol[species %in% sp_NoIndic, ]
+unique(set_distances_tol_no_indicators$species)
+
+
+
+# All occs; indicators
+round(mean(set_distances_tol_all_indicators$closest_field, na.rm = TRUE), 0)   # 12320
+round(sd(set_distances_tol_all_indicators$closest_field, na.rm = TRUE), 0)     # 13184
+round(mean(set_distances_tol_all_indicators$maize_share, na.rm = TRUE), 3)    # 0.001
+round(sd(set_distances_tol_all_indicators$maize_share, na.rm = TRUE), 3)      # 0.003
+
+# All occs; non-indicators
+round(mean(set_distances_tol_all_no_indicators$closest_field, na.rm = TRUE), 0)  # 4928
+round(sd(set_distances_tol_all_no_indicators$closest_field, na.rm = TRUE), 0)    # 12380
+round(mean(set_distances_tol_all_no_indicators$maize_share, na.rm = TRUE), 3)   # 0.029
+round(sd(set_distances_tol_all_no_indicators$maize_share, na.rm = TRUE), 3)     # 0.07
+
+
+# Occs below 1000m; indicators
+nrow(set_distances_tol_indicators)            # only 2 occs 
+unique(set_distances_tol_indicators$species)  # of 2 sps
+round(mean(set_distances_tol_indicators$closest_field, na.rm = TRUE), 0)   # 295
+round(sd(set_distances_tol_indicators$closest_field, na.rm = TRUE), 0)     # 174
+round(mean(set_distances_tol_indicators$maize_share, na.rm = TRUE), 3)    #  0.006
+round(sd(set_distances_tol_indicators$maize_share, na.rm = TRUE), 3)      #  0.004
+
+# All occs; non-indicators
+round(mean(set_distances_tol_no_indicators$closest_field, na.rm = TRUE), 0)  # 398
+round(sd(set_distances_tol_no_indicators$closest_field, na.rm = TRUE), 0)    # 282
+round(mean(set_distances_tol_no_indicators$maize_share, na.rm = TRUE), 3)   # 0.063
+round(sd(set_distances_tol_no_indicators$maize_share, na.rm = TRUE), 3)     # 0.092
 
 
 
