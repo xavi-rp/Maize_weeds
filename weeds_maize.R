@@ -1259,6 +1259,7 @@ sp_NoIndic <- sort(table(occs_all_2018_maiz_sf_laea[occs_all_2018_maiz_sf_laea$s
 sp_NoIndic <- names(sp_NoIndic)[1:25]  # selecting those 25 not indicator sp with more occurrences
 sp_indic_1 <- c(sp_indic_1, sp_NoIndic)  # all maize weeds; first, indicator sp
 #sp_indic_1 <- sp_indic_1[38:length(sp_indic_1)]
+save(sp_indic_1, file = "sp_indic_1.RData")
 
 #sp_indic_1 <- occs_01$Var1   # sps in classes 0-0.1 and 0.1-0.2 
 #sp_indic_1 <- c(sp_indic_1, occs_01$Var1)
@@ -2657,6 +2658,7 @@ library("scales")
 colrs <- viridis_pal()(length(unique(dist2maize_1$species)))
 #colrs <- viridis_pal()(2)
 show_col(colrs)
+save(colrs, file = "colrs.RData")
 #my_colrs <- ifelse(levels(dist2maize_1$species) %in% sps[1:4], colrs[1],
 #                   colrs[2])
 
@@ -2884,6 +2886,9 @@ occs_all_2018_maiz_sf_laea2
 
 
 #sp_indic_1 <- occs_00_indicators$Var1
+load("sp_indic_1.RData", verbose = TRUE)
+sp_indic_1
+
 
 occs_all_2018_maiz_sf_laea_indic1 <- occs_all_2018_maiz_sf_laea2[occs_all_2018_maiz_sf_laea2$species %in% sp_indic_1, ]
 occs_all_2018_maiz_sf_laea_indic1 <- occs_all_2018_maiz_sf_laea_indic1[occs_all_2018_maiz_sf_laea_indic1$countryCode == "FR", ]
@@ -3103,5 +3108,765 @@ round(sd(set_distances_tol_no_indicators$maize_share, na.rm = TRUE), 3)     # 0.
 
 
 
+
+
+
+
+## Validation with LPIS for FR - 2019 - 2020 ####
+# LPIS 
+library(RPostgreSQL)
+library(sf)
+
+drv <- dbDriver("PostgreSQL")
+connec <- dbConnect(drv, 
+                    dbname = "refocus_gsaa_db",
+                    host = "jeodb01.cidsn.jrc.it", 
+                    port = 54321,
+                    user = "refocus_gsaa_user_ro", 
+                    password = "K2Xo5RcDPQ")
+
+## LPIS. Maize fields
+
+maize_fr_2019 <- st_read(connec, query = "SELECT * FROM cropdiversity.maize_fr_2019")
+maize_fr_2019
+
+maize_fr_2020 <- st_read(connec, query = "SELECT * FROM cropdiversity.maize_fr_2020")
+maize_fr_2020
+
+
+## LPIS. Maize aggregated 1km
+
+croparea_maize_fr_1k_2019 <- st_read(connec, query = "SELECT * FROM cropdiversity.croparea_maize_fr_1k_2019")
+croparea_maize_fr_1k_2019
+range(croparea_maize_fr_1k_2019$area)   # area is maize share in ‰ (per mile; to be divided by 10^4 to get %) 
+summary(croparea_maize_fr_1k_2019$area) / 10000 
+
+croparea_maize_fr_1k_2020 <- st_read(connec, query = "SELECT * FROM cropdiversity.croparea_maize_fr_1k_2020")
+croparea_maize_fr_1k_2020
+range(croparea_maize_fr_1k_2020$area)   # area is maize share in ‰ (per mile; to be divided by 10^4 to get %) 
+summary(croparea_maize_fr_1k_2020$area) / 10000 
+
+
+
+### Distance to maize field and tolerance to maize share - 2019 ####
+
+
+occs_all_2019 <- occs_all[occs_all$year == 2019, ]
+
+occs_2019_specie <- unique(occs_all_2019$species)
+length(occs_2019_specie)
+
+
+weeds_maiz_gbib <- sort(weeds_maize$Species[weeds_maize$Species %in% occs_2019_specie])
+length(weeds_maiz_gbib)
+
+
+occs_all_2019_maiz <- occs_all_2019[occs_all_2019$species %in% weeds_maiz_gbib, ]
+
+
+setnames(occs_all_2019_maiz, c("decimalLongitude", "decimalLatitude"), c("x", "y"))
+
+occs_all_2019_maiz <- occs_all_2019_maiz[, .SD, .SDcols = c("species", "x", "y", "gbifID", "countryCode", "year")]
+occs_all_2019_maiz
+
+
+# How many occs in FR?
+occs_all_2019_maiz_fr <- occs_all_2019_maiz[occs_all_2019_maiz$countryCode == "FR", ]
+occs_all_2019_maiz_fr
+
+occs_00_indicators <- fread("sp_indicators.csv", header = TRUE)
+occs_00_indicators
+
+occs_all_2019_maiz_fr_indic <- occs_all_2019_maiz_fr[species %in% occs_00_indicators$Var1, ]
+table(occs_all_2019_maiz_fr_indic$species)
+
+
+
+## Distance to maize field and tolerance to maize share
+
+load("sp_indic_1.RData", verbose = TRUE)
+sp_indic_1
+
+
+occs_all_2019_maiz_sf <- st_as_sf(as.data.frame(occs_all_2019_maiz), coords = c("x", "y"), crs = 4326)#, agr = "constant")
+occs_all_2019_maiz_sf
+
+wkt <- sf::st_crs(3035)[[2]]
+
+occs_all_2019_maiz_sf_laea <- st_transform(occs_all_2019_maiz_sf, crs = sp::CRS(wkt))
+occs_all_2019_maiz_sf_laea
+
+
+occs_all_2019_maiz_sf_laea2 <- st_transform(occs_all_2019_maiz_sf_laea, crs = st_crs(maize_fr_2019))
+occs_all_2019_maiz_sf_laea2
+
+
+occs_all_2019_maiz_sf_laea_indic1 <- occs_all_2019_maiz_sf_laea2[occs_all_2019_maiz_sf_laea2$species %in% sp_indic_1, ]
+occs_all_2019_maiz_sf_laea_indic1 <- occs_all_2019_maiz_sf_laea_indic1[occs_all_2019_maiz_sf_laea_indic1$countryCode == "FR", ]
+occs_all_2019_maiz_sf_laea_indic1
+length(unique(occs_all_2019_maiz_sf_laea_indic1$species))  # 33 sp in FR
+
+
+
+set_distances_tol_all_2019 <- c()
+
+for (s in sp_indic_1){
+  print(s)
+  
+  occs_all_2019_maiz_sf_laea_indic1_2 <- occs_all_2019_maiz_sf_laea_indic1[occs_all_2019_maiz_sf_laea_indic1$species %in% s, ]
+  
+  t0 <- Sys.time()
+  closest_field <- apply(st_distance(occs_all_2019_maiz_sf_laea_indic1_2, maize_fr_2019), 1, min)
+  print(Sys.time() - t0)
+  
+  head(closest_field)
+  length(closest_field)
+  
+  
+  cols2save <- c("species", "gbifID", "countryCode", "year")
+  set_distances_tol <- as.data.frame(occs_all_2019_maiz_sf_laea_indic1_2)[, cols2save]
+  
+  set_distances_tol$closest_field <- round(closest_field, 0)
+  
+  
+  t0 <- Sys.time()
+  maize_share <- st_intersection(croparea_maize_fr_1k_2019, occs_all_2019_maiz_sf_laea_indic1_2)
+  print(Sys.time() - t0)
+  
+  
+  maize_share <- as.data.frame(maize_share)[, c("gbifID", "area")]
+  maize_share$area <- round(maize_share$area / 1000000, 3)  # this is in share (0-1)
+  
+  set_distances_tol <- merge(set_distances_tol, maize_share, all.x = TRUE, by = "gbifID")
+  set_distances_tol[is.na(set_distances_tol$area), "area"] <- 0
+  
+  
+  names(set_distances_tol) <- gsub("area", "maize_share", names(set_distances_tol))
+  set_distances_tol
+  
+  
+  set_distances_tol_all_2019 <- rbind(set_distances_tol_all_2019, set_distances_tol)
+  write.csv(set_distances_tol_all_2019, paste0("distance2maize_LPIS_FR_all_2019", ".csv"), row.names = FALSE)
+  gc()
+  
+}
+
+
+#set_distances_tol_all_2019 <- read.csv(paste0("distance2maize_LPIS_FR_all_2019", ".csv"), header = TRUE)
+set_distances_tol_all_2019
+length(unique(set_distances_tol_all_2019$species))
+unique(set_distances_tol_all_2019$species)
+table(set_distances_tol_all_2019$species)
+
+
+set_distances_tol_2019 <- set_distances_tol_all_2019[set_distances_tol_all_2019$closest_field <= 1000, ]
+nrow(set_distances_tol_all_2019)
+nrow(set_distances_tol_2019)
+
+
+summary(set_distances_tol_2019$closest_field)
+sd(set_distances_tol_2019$closest_field, na.rm = TRUE)
+
+summary(set_distances_tol_2019$maize_share)
+sd(set_distances_tol_2019$maize_share, na.rm = TRUE)
+
+
+
+## Plots
+
+head(set_distances_tol_all_2019)
+set_distances_tol_all_2019$species <- factor(set_distances_tol_all_2019$species, sps)
+set_distances_tol_2019$species <- factor(set_distances_tol_2019$species, sps)
+
+
+#jpeg(paste0("distance2maize_", "all_LPIS_FR_2019", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+jpeg(paste0("distance2maize_", "all_below1km_LPIS_FR_2019", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+
+par(mfrow = c(2, 2), mar = c(2, 5, 2, 2))
+
+#boxplot(set_distances_tol_all_2019$closest_field ~ set_distances_tol_all_2019$species,
+boxplot(set_distances_tol_2019$closest_field ~ set_distances_tol_2019$species,
+        ylim = c(0, 1000),
+        #ylim = c(0, 25000),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Distance to maize (m)",
+        xaxt = 'n', 
+        #cex.axis = 0.7,
+        #at = c(1:25, 27:51),
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:25, 27:36, 38:42),
+        ann = TRUE)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+#mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
+
+
+plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
+legend("center", 
+       #legend = c("Indicator species","Not Indicator sps."), 
+       legend = paste0(1:length(sps), "-", levels(dist2maize_1$species)), 
+       col = c(colrs),
+       ncol = 3,
+       bty = "n", 
+       pch=20 , pt.cex = 3, cex = 0.8, 
+       horiz = FALSE)#, 
+#inset = - 1)
+
+
+boxplot(set_distances_tol_2019$maize_share  ~ set_distances_tol_2019$species, 
+        #boxplot(set_distances_tol_all_2019$maize_share  ~ set_distances_tol_all_2019$species, 
+        ylim = c(0, 0.2),
+        #ylim = c(0, 0.1),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Share of maize (scale: 1km)",
+        xaxt = 'n', 
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        ann = TRUE)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+
+#boxplot(set_distances_tol_2019$cropmap2018_ArableLand_1km ~ set_distances_tol_2019$species, 
+#boxplot(set_distances_tol_all_2019$cropmap2018_ArableLand_1km ~ set_distances_tol_all_2019$species, 
+#        ylim = c(0, 1),
+#        col = colrs,
+#        main = "",
+#        xlab = "", 
+#        ylab = "Share of arable land (scale: 1km)",
+#        xaxt = 'n', 
+#        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+#        ann = TRUE)
+#mtext("Indicator Species                      Non-indicator Species", side = 3)
+#axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+
+#par(xpd = TRUE)
+
+dev.off()
+
+
+
+## Some results for reporting
+set_distances_tol_all_2019 <- data.table(set_distances_tol_all_2019)
+set_distances_tol_2019 <- data.table(set_distances_tol_2019)
+
+set_distances_tol_all_2019_indicators <- set_distances_tol_all_2019[!species %in% sp_NoIndic, ]
+unique(set_distances_tol_all_2019_indicators$species)
+
+set_distances_tol_all_2019_no_indicators <- set_distances_tol_all_2019[species %in% sp_NoIndic, ]
+unique(set_distances_tol_all_2019_no_indicators$species)
+
+
+names(set_distances_tol_all_2019_indicators)
+
+sum(is.na(set_distances_tol_all_2019_indicators$closest_field))
+length(set_distances_tol_all_2019_indicators$closest_field)
+
+
+set_distances_tol_2019_indicators <- set_distances_tol_2019[!species %in% sp_NoIndic, ]
+unique(set_distances_tol_2019_indicators$species)
+
+set_distances_tol_2019_no_indicators <- set_distances_tol_2019[species %in% sp_NoIndic, ]
+unique(set_distances_tol_2019_no_indicators$species)
+
+
+
+# All occs; indicators
+nrow(set_distances_tol_all_2019_indicators)  # 33 occs
+round(mean(set_distances_tol_all_2019_indicators$closest_field, na.rm = TRUE), 0)   # 6781
+round(sd(set_distances_tol_all_2019_indicators$closest_field, na.rm = TRUE), 0)     # 9945
+round(mean(set_distances_tol_all_2019_indicators$maize_share, na.rm = TRUE), 3)    # 0.014
+round(sd(set_distances_tol_all_2019_indicators$maize_share, na.rm = TRUE), 3)      # 0.037
+
+# All occs; non-indicators
+round(mean(set_distances_tol_all_2019_no_indicators$closest_field, na.rm = TRUE), 0)  # 4623
+round(sd(set_distances_tol_all_2019_no_indicators$closest_field, na.rm = TRUE), 0)    # 11798
+round(mean(set_distances_tol_all_2019_no_indicators$maize_share, na.rm = TRUE), 3)   # 0.032
+round(sd(set_distances_tol_all_2019_no_indicators$maize_share, na.rm = TRUE), 3)     # 0.075
+
+
+# Occs below 1000m; indicators
+nrow(set_distances_tol_2019_indicators)            #  12 occs 
+unique(set_distances_tol_2019_indicators$species)  #  of 5 sps
+round(mean(set_distances_tol_2019_indicators$closest_field, na.rm = TRUE), 0)     # 364
+round(sd(set_distances_tol_2019_indicators$closest_field, na.rm = TRUE), 0)       # 349
+round(mean(set_distances_tol_2019_indicators$maize_share, na.rm = TRUE), 3)       # 0.038
+round(sd(set_distances_tol_2019_indicators$maize_share, na.rm = TRUE), 3)         # 0.054
+
+# All occs; non-indicators
+round(mean(set_distances_tol_2019_no_indicators$closest_field, na.rm = TRUE), 0)  # 393
+round(sd(set_distances_tol_2019_no_indicators$closest_field, na.rm = TRUE), 0)    # 280
+round(mean(set_distances_tol_2019_no_indicators$maize_share, na.rm = TRUE), 3)    # 0.067
+round(sd(set_distances_tol_2019_no_indicators$maize_share, na.rm = TRUE), 3)      # 0.096
+
+
+
+
+
+### Distance to maize field and tolerance to maize share - 2020 ####
+
+
+occs_all_2020 <- occs_all[occs_all$year == 2020, ]
+
+occs_2020_specie <- unique(occs_all_2020$species)
+length(occs_2020_specie)
+
+
+weeds_maiz_gbib <- sort(weeds_maize$Species[weeds_maize$Species %in% occs_2020_specie])
+length(weeds_maiz_gbib)
+
+
+occs_all_2020_maiz <- occs_all_2020[occs_all_2020$species %in% weeds_maiz_gbib, ]
+
+
+setnames(occs_all_2020_maiz, c("decimalLongitude", "decimalLatitude"), c("x", "y"))
+
+occs_all_2020_maiz <- occs_all_2020_maiz[, .SD, .SDcols = c("species", "x", "y", "gbifID", "countryCode", "year")]
+occs_all_2020_maiz
+
+
+# How many occs in FR?
+occs_all_2020_maiz_fr <- occs_all_2020_maiz[occs_all_2020_maiz$countryCode == "FR", ]
+occs_all_2020_maiz_fr
+
+occs_00_indicators <- fread("sp_indicators.csv", header = TRUE)
+occs_00_indicators
+
+occs_all_2020_maiz_fr_indic <- occs_all_2020_maiz_fr[species %in% occs_00_indicators$Var1, ]
+table(occs_all_2020_maiz_fr_indic$species)
+
+
+
+## Distance to maize field and tolerance to maize share
+
+load("sp_indic_1.RData", verbose = TRUE)
+sp_indic_1
+
+occs_all_2020_maiz_sf <- st_as_sf(as.data.frame(occs_all_2020_maiz), coords = c("x", "y"), crs = 4326)#, agr = "constant")
+occs_all_2020_maiz_sf
+
+wkt <- sf::st_crs(3035)[[2]]
+
+occs_all_2020_maiz_sf_laea <- st_transform(occs_all_2020_maiz_sf, crs = sp::CRS(wkt))
+occs_all_2020_maiz_sf_laea
+
+
+occs_all_2020_maiz_sf_laea2 <- st_transform(occs_all_2020_maiz_sf_laea, crs = st_crs(maize_fr_2020))
+occs_all_2020_maiz_sf_laea2
+
+
+occs_all_2020_maiz_sf_laea_indic1 <- occs_all_2020_maiz_sf_laea2[occs_all_2020_maiz_sf_laea2$species %in% sp_indic_1, ]
+occs_all_2020_maiz_sf_laea_indic1 <- occs_all_2020_maiz_sf_laea_indic1[occs_all_2020_maiz_sf_laea_indic1$countryCode == "FR", ]
+occs_all_2020_maiz_sf_laea_indic1
+length(unique(occs_all_2020_maiz_sf_laea_indic1$species))  # 33 sp in FR
+
+
+
+set_distances_tol_all_2020 <- c()
+
+for (s in sp_indic_1){
+  print(s)
+  
+  occs_all_2020_maiz_sf_laea_indic1_2 <- occs_all_2020_maiz_sf_laea_indic1[occs_all_2020_maiz_sf_laea_indic1$species %in% s, ]
+  
+  t0 <- Sys.time()
+  closest_field <- apply(st_distance(occs_all_2020_maiz_sf_laea_indic1_2, maize_fr_2020), 1, min)
+  print(Sys.time() - t0)
+  
+  head(closest_field)
+  length(closest_field)
+  
+  
+  cols2save <- c("species", "gbifID", "countryCode", "year")
+  set_distances_tol <- as.data.frame(occs_all_2020_maiz_sf_laea_indic1_2)[, cols2save]
+  
+  set_distances_tol$closest_field <- round(closest_field, 0)
+  
+  
+  t0 <- Sys.time()
+  maize_share <- st_intersection(croparea_maize_fr_1k_2020, occs_all_2020_maiz_sf_laea_indic1_2)
+  print(Sys.time() - t0)
+  
+  
+  maize_share <- as.data.frame(maize_share)[, c("gbifID", "area")]
+  maize_share$area <- round(maize_share$area / 1000000, 3)  # this is in share (0-1)
+  
+  set_distances_tol <- merge(set_distances_tol, maize_share, all.x = TRUE, by = "gbifID")
+  set_distances_tol[is.na(set_distances_tol$area), "area"] <- 0
+  
+  
+  names(set_distances_tol) <- gsub("area", "maize_share", names(set_distances_tol))
+  set_distances_tol
+  
+  
+  set_distances_tol_all_2020 <- rbind(set_distances_tol_all_2020, set_distances_tol)
+  write.csv(set_distances_tol_all_2020, paste0("distance2maize_LPIS_FR_all_2020", ".csv"), row.names = FALSE)
+  gc()
+  
+}
+
+
+#set_distances_tol_all_2020 <- read.csv(paste0("distance2maize_LPIS_FR_all_2020", ".csv"), header = TRUE)
+set_distances_tol_all_2020
+length(unique(set_distances_tol_all_2020$species))
+unique(set_distances_tol_all_2020$species)
+table(set_distances_tol_all_2020$species)
+
+
+set_distances_tol_2020 <- set_distances_tol_all_2020[set_distances_tol_all_2020$closest_field <= 1000, ]
+nrow(set_distances_tol_all_2020)
+nrow(set_distances_tol_2020)
+
+
+summary(set_distances_tol_2020$closest_field)
+sd(set_distances_tol_2020$closest_field, na.rm = TRUE)
+
+summary(set_distances_tol_2020$maize_share)
+sd(set_distances_tol_2020$maize_share, na.rm = TRUE)
+
+
+
+## Plots
+
+head(set_distances_tol_all_2020)
+set_distances_tol_all_2020$species <- factor(set_distances_tol_all_2020$species, sps)
+set_distances_tol_2020$species <- factor(set_distances_tol_2020$species, sps)
+
+
+#jpeg(paste0("distance2maize_", "all_LPIS_FR_2020", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+jpeg(paste0("distance2maize_", "all_below1km_LPIS_FR_2020", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+
+par(mfrow = c(2, 2), mar = c(2, 5, 2, 2))
+
+#boxplot(set_distances_tol_all_2020$closest_field ~ set_distances_tol_all_2020$species,
+boxplot(set_distances_tol_2020$closest_field ~ set_distances_tol_2020$species,
+        ylim = c(0, 1000),
+        #ylim = c(0, 25000),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Distance to maize (m)",
+        xaxt = 'n', 
+        #cex.axis = 0.7,
+        #at = c(1:25, 27:51),
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:25, 27:36, 38:42),
+        ann = TRUE)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+#mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
+
+
+plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
+legend("center", 
+       #legend = c("Indicator species","Not Indicator sps."), 
+       legend = paste0(1:length(sps), "-", levels(dist2maize_1$species)), 
+       col = c(colrs),
+       ncol = 3,
+       bty = "n", 
+       pch=20 , pt.cex = 3, cex = 0.8, 
+       horiz = FALSE)#, 
+#inset = - 1)
+
+
+boxplot(set_distances_tol_2020$maize_share  ~ set_distances_tol_2020$species, 
+        #boxplot(set_distances_tol_all_2020$maize_share  ~ set_distances_tol_all_2020$species, 
+        ylim = c(0, 0.2),
+        #ylim = c(0, 0.1),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Share of maize (scale: 1km)",
+        xaxt = 'n', 
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        ann = TRUE)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+
+#boxplot(set_distances_tol_2020$cropmap2018_ArableLand_1km ~ set_distances_tol_2020$species, 
+#boxplot(set_distances_tol_all_2020$cropmap2018_ArableLand_1km ~ set_distances_tol_all_2020$species, 
+#        ylim = c(0, 1),
+#        col = colrs,
+#        main = "",
+#        xlab = "", 
+#        ylab = "Share of arable land (scale: 1km)",
+#        xaxt = 'n', 
+#        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+#        ann = TRUE)
+#mtext("Indicator Species                      Non-indicator Species", side = 3)
+#axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+
+#par(xpd = TRUE)
+
+dev.off()
+
+
+
+## Some results for reporting
+set_distances_tol_all_2020 <- data.table(set_distances_tol_all_2020)
+set_distances_tol_2020 <- data.table(set_distances_tol_2020)
+
+set_distances_tol_all_2020_indicators <- set_distances_tol_all_2020[!species %in% sp_NoIndic, ]
+unique(set_distances_tol_all_2020_indicators$species)
+
+set_distances_tol_all_2020_no_indicators <- set_distances_tol_all_2020[species %in% sp_NoIndic, ]
+unique(set_distances_tol_all_2020_no_indicators$species)
+
+
+names(set_distances_tol_all_2020_indicators)
+
+sum(is.na(set_distances_tol_all_2020_indicators$closest_field))
+length(set_distances_tol_all_2020_indicators$closest_field)
+
+
+set_distances_tol_2020_indicators <- set_distances_tol_2020[!species %in% sp_NoIndic, ]
+unique(set_distances_tol_2020_indicators$species)
+
+set_distances_tol_2020_no_indicators <- set_distances_tol_2020[species %in% sp_NoIndic, ]
+unique(set_distances_tol_2020_no_indicators$species)
+
+
+
+# All occs; indicators
+nrow(set_distances_tol_all_2020_indicators)  #  occs
+round(mean(set_distances_tol_all_2020_indicators$closest_field, na.rm = TRUE), 0)   # 
+round(sd(set_distances_tol_all_2020_indicators$closest_field, na.rm = TRUE), 0)     # 
+round(mean(set_distances_tol_all_2020_indicators$maize_share, na.rm = TRUE), 3)    # 
+round(sd(set_distances_tol_all_2020_indicators$maize_share, na.rm = TRUE), 3)      # 
+
+# All occs; non-indicators
+round(mean(set_distances_tol_all_2020_no_indicators$closest_field, na.rm = TRUE), 0)  # 
+round(sd(set_distances_tol_all_2020_no_indicators$closest_field, na.rm = TRUE), 0)    # 
+round(mean(set_distances_tol_all_2020_no_indicators$maize_share, na.rm = TRUE), 3)   # 
+round(sd(set_distances_tol_all_2020_no_indicators$maize_share, na.rm = TRUE), 3)     # 
+
+
+# Occs below 1000m; indicators
+nrow(set_distances_tol_2020_indicators)            #   occs 
+unique(set_distances_tol_2020_indicators$species)  #  of  sps
+round(mean(set_distances_tol_2020_indicators$closest_field, na.rm = TRUE), 0)     # 
+round(sd(set_distances_tol_2020_indicators$closest_field, na.rm = TRUE), 0)       # 
+round(mean(set_distances_tol_2020_indicators$maize_share, na.rm = TRUE), 3)       # 
+round(sd(set_distances_tol_2020_indicators$maize_share, na.rm = TRUE), 3)         # 
+
+# All occs; non-indicators
+round(mean(set_distances_tol_2020_no_indicators$closest_field, na.rm = TRUE), 0)  # 
+round(sd(set_distances_tol_2020_no_indicators$closest_field, na.rm = TRUE), 0)    # 
+round(mean(set_distances_tol_2020_no_indicators$maize_share, na.rm = TRUE), 3)    # 
+round(sd(set_distances_tol_2020_no_indicators$maize_share, na.rm = TRUE), 3)      # 
+
+
+
+### Reporting together ####
+
+set_distances_tol_all <- read.csv(paste0("distance2maize_LPIS_FR_all", ".csv"), header = TRUE)
+set_distances_tol_all_2019 <- read.csv(paste0("distance2maize_LPIS_FR_all_2019", ".csv"), header = TRUE)
+set_distances_tol_all_2020 <- read.csv(paste0("distance2maize_LPIS_FR_all_2020", ".csv"), header = TRUE)
+
+
+
+# Table
+
+head(set_distances_tol_all)
+set_distances_tol_all %>% group_by(species) %>% 
+  summarize(closest_field = mean(closest_field, na.rm=TRUE), maize_share = mean(maize_share, na.rm = TRUE), n = n())
+
+
+load("sp_indic_1.RData", verbose = TRUE)
+sp_indic_1
+
+sp_indic_1_df <- as.data.frame(sp_indic_1)
+sp_indic_1_df$indicator <- c(rep("indicator", 25), rep("non-indicator", 25))
+sp_indic_1_df
+
+
+
+
+
+set_distances_tol_all_2018_2020 <- rbind(set_distances_tol_all, set_distances_tol_all_2019, set_distances_tol_all_2020)
+head(set_distances_tol_all_2018_2020)
+
+set_distances_tol_all_2018_2020 <- merge(set_distances_tol_all_2018_2020, sp_indic_1_df, all.x = TRUE, by.x = "species", by.y = "sp_indic_1")
+head(set_distances_tol_all_2018_2020)
+
+
+
+set_distances_tolerance_all_2018_2020 <- set_distances_tol_all_2018_2020 %>% group_by(year, indicator) %>% 
+  summarize(N = n(),
+            closest_field_mean = round(mean(closest_field, na.rm = TRUE), 0), 
+            maize_share_mean = round(mean(maize_share, na.rm = TRUE), 3),
+            closest_field_sd = round(sd(closest_field, na.rm = TRUE), 0),
+            maize_share_sd = round(sd(maize_share, na.rm = TRUE), 3)
+            )
+set_distances_tolerance_all_2018_2020 <- as.data.frame(set_distances_tolerance_all_2018_2020)
+
+write.csv(set_distances_tolerance_all_2018_2020, "set_distances_tolerance_all_2018_2020.csv", row.names = FALSE)
+
+
+
+# Plot
+
+set_distances_tol_all$species <- factor(set_distances_tol_all$species, sps)
+#set_distances_tol$species <- factor(set_distances_tol$species, sps)
+set_distances_tol_all_2019$species <- factor(set_distances_tol_all_2019$species, sps)
+#set_distances_tol_2019$species <- factor(set_distances_tol_2019$species, sps)
+set_distances_tol_all_2020$species <- factor(set_distances_tol_all_2020$species, sps)
+#set_distances_tol_2020$species <- factor(set_distances_tol_2020$species, sps)
+
+load("colrs.RData", verbose = TRUE)
+length(colrs)
+
+load("sp_indic_1.RData", verbose = TRUE)
+sp_indic_1
+sps <- sp_indic_1
+
+
+
+jpeg(paste0("distance2maize_", "all_LPIS_FR_2018_20", ".jpg"), width = 40, height = 24, units = "cm", res = 300)
+#jpeg(paste0("distance2maize_", "all_below1km_LPIS_FR_2018_20", ".jpg"), width = 31, height = 24, units = "cm", res = 300)
+
+par(mfcol = c(3, 3), mar = c(2, 5, 3, 2))
+
+# 2018
+boxplot(set_distances_tol_all$closest_field ~ set_distances_tol_all$species,
+#boxplot(set_distances_tol$closest_field ~ set_distances_tol$species,
+        #ylim = c(0, 1000),
+        ylim = c(0, 25000),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Distance to maize (m)",
+        xaxt = 'n', 
+        #cex.axis = 0.7,
+        #at = c(1:25, 27:51),
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:25, 27:36, 38:42),
+        ann = TRUE)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+#mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
+mtext("2018", side = 3, line = 1)
+
+
+
+#boxplot(set_distances_tol$maize_share  ~ set_distances_tol$species, 
+boxplot(set_distances_tol_all$maize_share  ~ set_distances_tol_all$species, 
+        ylim = c(0, 0.2),
+        #ylim = c(0, 0.1),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Share of maize (scale: 1km)",
+        xaxt = 'n', 
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        ann = TRUE)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
+
+
+# 2019
+boxplot(set_distances_tol_all_2019$closest_field ~ set_distances_tol_all_2019$species,
+#boxplot(set_distances_tol_2019$closest_field ~ set_distances_tol_2019$species,
+        #ylim = c(0, 1000),
+        ylim = c(0, 25000),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Distance to maize (m)",
+        xaxt = 'n', 
+        #cex.axis = 0.7,
+        #at = c(1:25, 27:51),
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:25, 27:36, 38:42),
+        ann = TRUE)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("2019", side = 3, line = 1)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+#mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
+
+
+#boxplot(set_distances_tol_2019$maize_share  ~ set_distances_tol_2019$species, 
+boxplot(set_distances_tol_all_2019$maize_share  ~ set_distances_tol_all_2019$species, 
+        ylim = c(0, 0.2),
+        #ylim = c(0, 0.1),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Share of maize (scale: 1km)",
+        xaxt = 'n', 
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        ann = TRUE)
+
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
+#par(xpd=TRUE)
+legend("center", 
+       #legend = c("Indicator species","Not Indicator sps."), 
+       legend = paste0(1:length(sps), "-", sps), 
+       col = c(colrs),
+       ncol = 3,
+       bty = "n", 
+       pch=20 , pt.cex = 1.5, 
+       cex = 0.9, 
+       horiz = FALSE#, 
+       #inset = -0.55
+       )
+#par(xpd=FALSE)
+
+# 2020
+boxplot(set_distances_tol_all_2020$closest_field ~ set_distances_tol_all_2020$species,
+#boxplot(set_distances_tol_2020$closest_field ~ set_distances_tol_2020$species,
+        #ylim = c(0, 1000),
+        ylim = c(0, 25000),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Distance to maize (m)",
+        xaxt = 'n', 
+        #cex.axis = 0.7,
+        #at = c(1:25, 27:51),
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        #at = c(1:25, 27:36, 38:42),
+        ann = TRUE)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+#axis(1, cex.axis = 0.7, at = c(1:25, 27:36, 38:42), labels = 1:length(sps), las = 2)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+#mtext("  Indicator Species                                  Sensitive       Tolerant", side = 3)
+mtext("2020", side = 3, line = 1)
+
+
+#boxplot(set_distances_tol_2020$maize_share  ~ set_distances_tol_2020$species, 
+boxplot(set_distances_tol_all_2020$maize_share  ~ set_distances_tol_all_2020$species, 
+        ylim = c(0, 0.2),
+        #ylim = c(0, 0.1),
+        col = colrs,
+        main = "",
+        xlab = "", 
+        ylab = "Share of maize (scale: 1km)",
+        xaxt = 'n', 
+        at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
+        ann = TRUE)
+mtext("Indicator Species                      Non-indicator Species", side = 3)
+axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
+
+plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
+
+#par(xpd = TRUE)
+
+dev.off()
 
 
