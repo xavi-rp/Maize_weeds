@@ -7,6 +7,7 @@ library(sp)
 library(sf)
 library(data.table)
 library(RVenn)
+library(ggplot2)
 library(devtools)
 #install_github("xavi-rp/PreSPickR", 
 #               ref = "v2", 
@@ -321,6 +322,18 @@ cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
 weeds_maize <- read.csv("weeds_maize_report_2011.csv", header = TRUE)
 head(weeds_maize)
 nrow(weeds_maize)
+
+## families of the weeds
+fams <- c()
+for(sp in weeds_maize$Species){
+  fam1 <- as.data.frame(rgbif::name_backbone(name =  sp))$family
+  fams <- c(fams, fam1)
+}
+unique(fams)
+length(unique(fams))
+sort(unique(fams))
+fams
+#
 
 occs_all <- fread(paste0(getwd(), "/../exploring_lucas_data/D5_FFGRCC_gbif_occ/sp_records_20210709.csv"), header = TRUE)
 if(nchar(occs_all$sp2[1]) == 7) occs_all[, sp2 := gsub(" ", "_", occs_all$species)]
@@ -1274,13 +1287,13 @@ head(sps_groups_df)
 library(forcats)
 library(tidyverse)
 
-pdf("heatmap_IndicatorSp_2.pdf",
-    width = 15, height = 30)
+#pdf("heatmap_IndicatorSp_2.pdf",
+#    width = 15, height = 30)
 
-#jpeg("heatmap_IndicatorSp_2.jpg",
-#     units = "cm",
-#     res = 300,
-#     width = 15, height = 40)
+jpeg("heatmap_IndicatorSp_2.jpg",
+     units = "cm",
+     res = 300,
+     width = 15, height = 40)
 
 sps_groups_df %>%
   mutate(Species = fct_reorder(Species, desc(Species))) %>% 
@@ -2069,9 +2082,8 @@ cropmap2018_maiz_1km_vals <- getValues(cropmap2018_maiz_1km)
 summary(cropmap2018_maiz_1km_vals)
 rm(cropmap2018_maiz_1km_vals)
 
-# removing pixels with vals < 0.01 (1% of maize in the 10km pixel) to remove some noise
 cropmap2018_maiz_1km_clean <- cropmap2018_maiz_1km
-cropmap2018_maiz_1km_clean[cropmap2018_maiz_1km < 0.01] <- NA 
+#cropmap2018_maiz_1km_clean[cropmap2018_maiz_1km < 0.01] <- NA 
 
 plot(cropmap2018_maiz_1km_clean)
 cropmap2018_maiz_1km_clean_vals <- getValues(cropmap2018_maiz_1km_clean)
@@ -2095,8 +2107,20 @@ plot(cropmap2018_maiz_1km_clean_1)
 comp_df <- data.table(data.frame(getValues(Absolute_intensity_5_clas_Fig3A), getValues(cropmap2018_maiz_1km_clean_1)))
 comp_df
 sum(complete.cases(comp_df))
-comp_df <- comp_df[complete.cases(comp_df), 1:2]
+#comp_df <- comp_df[complete.cases(comp_df), 1:2]
+comp_df <- comp_df[complete.cases(comp_df), 1:3]
 comp_df
+
+## Keeping only pixels with >= 20% of arable land, to be shure that we are focused in crop areas... This reduces a lot the correlation!!
+#summary(comp_df$cropmap2018_arabland_1km)
+#comp_df <- comp_df[cropmap2018_arabland_1km >= 0.2, ]
+
+# Keeping only pixels with >= 0.2% of maize share, to remove some noise produced by the CropMap
+summary(comp_df$cropmap2018_maiz_1km)
+comp_df <- comp_df[cropmap2018_maiz_1km >= 0.002, ]
+#comp_df <- comp_df[cropmap2018_maiz_1km >= 0.01, ]
+
+comp_df <- comp_df[, .SD, .SDcols = c("getValues.Absolute_intensity_5_clas_Fig3A.", "cropmap2018_maiz_1km")]
 
 # Pearson's correlation coefficient
 comp_df_pearson <- cor(comp_df, method = "pearson")[2, 1]
@@ -2113,7 +2137,8 @@ comp_df_subsample <- comp_df[sample(nrow(comp_df), num_subsample), ]
 library(lattice)
 jpeg(paste0("comp_CropMapMaize_Rega3A.jpg"))
 xyplot(comp_df_subsample$getValues.Absolute_intensity_5_clas_Fig3A. ~ 
-         comp_df_subsample$getValues.cropmap2018_maiz_1km_clean_1., 
+         #comp_df_subsample$getValues.cropmap2018_maiz_1km_clean_1., 
+         comp_df_subsample$cropmap2018_maiz_1km, 
        type = c("p", "r"),
        col.line = "red",
        xlab = "Maize share (Crop Map)",
@@ -2125,26 +2150,6 @@ dev.off()
 
 
 
-## maize share aggregated at 1km from the Crop Map
-par(mfrow = c(1, 2))
-dev.off()
-
-cropmap2018_maiz_1km
-plot(cropmap2018_maiz_1km)
-
-cropmap2018_maiz_1km_vals <- getValues(cropmap2018_maiz_1km)
-summary(cropmap2018_maiz_1km_vals)
-rm(cropmap2018_maiz_1km_vals)
-
-# removing pixels with vals < 0.01 (1% of maize in the 1km pixel) to remove some noise
-cropmap2018_maiz_1km_clean <- cropmap2018_maiz_1km
-cropmap2018_maiz_1km_clean[cropmap2018_maiz_1km < 0.01] <- NA 
-
-plot(cropmap2018_maiz_1km_clean)
-cropmap2018_maiz_1km_clean_vals <- getValues(cropmap2018_maiz_1km_clean)
-summary(cropmap2018_maiz_1km_clean_vals)
-range(cropmap2018_maiz_1km_clean_vals, na.rm = TRUE)
-rm(cropmap2018_maiz_1km_clean_vals)
 
 
 
@@ -2165,7 +2170,17 @@ plot(cropmap2018_maiz_1km_clean_1)
 comp_df <- data.table(data.frame(getValues(Energy_input_2008_fille04_no_labour), getValues(cropmap2018_maiz_1km_clean_1)))
 comp_df
 sum(complete.cases(comp_df))
-comp_df <- comp_df[complete.cases(comp_df), 1:2]
+#comp_df <- comp_df[complete.cases(comp_df), 1:2]
+comp_df <- comp_df[complete.cases(comp_df), 1:3]
+comp_df
+
+
+# Keeping only pixels with >= 0.2% of maize share, to remove some noise produced by the CropMap
+summary(comp_df$cropmap2018_maiz_1km)
+comp_df <- comp_df[cropmap2018_maiz_1km >= 0.002, ]
+#comp_df <- comp_df[cropmap2018_maiz_1km >= 0.01, ]
+
+comp_df <- comp_df[, .SD, .SDcols = c("getValues.Energy_input_2008_fille04_no_labour.", "cropmap2018_maiz_1km")]
 comp_df
 
 # Pearson's correlation coefficient
@@ -2183,7 +2198,8 @@ comp_df_subsample <- comp_df[sample(nrow(comp_df), num_subsample), ]
 library(lattice)
 jpeg(paste0("comp_CropMapMaize_Energy_input_2008_fille04_no_labour.jpg"))
 xyplot(comp_df_subsample$getValues.Energy_input_2008_fille04_no_labour. ~ 
-         comp_df_subsample$getValues.cropmap2018_maiz_1km_clean_1., 
+         #comp_df_subsample$getValues.cropmap2018_maiz_1km_clean_1., 
+         comp_df_subsample$cropmap2018_maiz_1km, 
        type = c("p", "r"),
        col.line = "red",
        xlab = "Maize share (Crop Map)",
@@ -3608,7 +3624,6 @@ occs_all_indic_dt <- occs_all_indic %>%
   summarise(count=n()) %>%
   as.data.table()
  
-library(ggplot2) 
 ggplot(occs_all_indic_dt, aes(x = year, y = count)) + 
   geom_line(aes(color = species), size = 1) +
   scale_color_viridis(discrete = TRUE) +
@@ -3646,6 +3661,11 @@ summary(croparea_maize_fr_1k_2018$area) / 10000
 croparea_maize_fr_1k_2019 <- st_read(connec, query = "SELECT * FROM cropdiversity.croparea_maize_fr_1k_2019")
 croparea_maize_fr_1k_2020 <- st_read(connec, query = "SELECT * FROM cropdiversity.croparea_maize_fr_1k_2020")
 
+
+## Share of arable land
+croparea_crop_fr_1k_2018 <- st_read(connec, query = "SELECT * FROM cropdiversity.croparea_crop_fr_1k_2018")
+croparea_crop_fr_1k_2019 <- st_read(connec, query = "SELECT * FROM cropdiversity.croparea_crop_fr_1k_2019")
+croparea_crop_fr_1k_2020 <- st_read(connec, query = "SELECT * FROM cropdiversity.croparea_crop_fr_1k_2020")
 
 
 ## Maize weeds
@@ -3689,48 +3709,60 @@ occs_all_2018_maiz_fr_sf <- st_as_sf(as.data.frame(occs_all_2018_maiz_fr), coord
 occs_all_2018_maiz_fr_sf
 
 #sf::st_crs(3035)
-wkt <- sf::st_crs(3035)[[2]]
+#wkt <- sf::st_crs(3035)[[2]]
 #sp::CRS(wkt)
 
+#occs_all_2018_maiz_fr_sf_laea <- st_transform(occs_all_2018_maiz_fr_sf, crs = sp::CRS(wkt))
+#occs_all_2018_maiz_fr_sf_laea
 
-occs_all_2018_maiz_fr_sf_laea <- st_transform(occs_all_2018_maiz_fr_sf, crs = sp::CRS(wkt))
-occs_all_2018_maiz_fr_sf_laea
-
-occs_all_2018_maiz_fr_sf_laea <- st_transform(occs_all_2018_maiz_fr_sf_laea, crs = st_crs(croparea_maize_fr_1k_2018))
+occs_all_2018_maiz_fr_sf_laea <- st_transform(occs_all_2018_maiz_fr_sf, crs = st_crs(croparea_maize_fr_1k_2018))
 
 # joining maize share
 occs_maizeShare_2018_fr <- st_join(occs_all_2018_maiz_fr_sf_laea, croparea_maize_fr_1k_2018)
+names(occs_maizeShare_2018_fr) <- gsub("area", "MaizeShare", names(occs_maizeShare_2018_fr))
 occs_maizeShare_2018_fr
+
+# joining Arable land share
+occs_maizeShare_2018_fr <- st_join(occs_maizeShare_2018_fr, croparea_crop_fr_1k_2018)
+names(occs_maizeShare_2018_fr) <- gsub("area", "ArableLandShare", names(occs_maizeShare_2018_fr))
+occs_maizeShare_2018_fr
+
 
 occs_maizeShare_2018_fr <- as.data.table(occs_maizeShare_2018_fr)
 
 occs_maizeShare_2018_fr <- na.omit(occs_maizeShare_2018_fr)
 
 # scaling maize share
-summary(occs_maizeShare_2018_fr$area) / 1000000
+summary(occs_maizeShare_2018_fr$MaizeShare) / 1000000
+occs_maizeShare_2018_fr$MaizeShare <- occs_maizeShare_2018_fr$MaizeShare / 1000000
 
-occs_maizeShare_2018_fr$area <- occs_maizeShare_2018_fr$area / 1000000
+# scaling arable land share
+summary(occs_maizeShare_2018_fr$ArableLandShare) / 1000000
+occs_maizeShare_2018_fr$ArableLandShare <- occs_maizeShare_2018_fr$ArableLandShare / 1000000
 
-setnames(occs_maizeShare_2018_fr, "area", "Maize_share")
+#setnames(occs_maizeShare_2018_fr, "area", "Maize_share")
 occs_maizeShare_2018_fr
 
-summary(occs_maizeShare_2018_fr$Maize_share)
+summary(occs_maizeShare_2018_fr$MaizeShare)
 length(unique(occs_maizeShare_2018_fr$species))
 sort(table(occs_maizeShare_2018_fr$species))
 
 # Removing repeated occurrences (same sp) in the same pixel, because we want to work with Species Richness
-sum(duplicated(occs_maizeShare_2018_fr[, .SD, .SDcols = c("species", "id")]))
-View(occs_maizeShare_2018_fr[duplicated(occs_maizeShare_2018_fr[, .SD, .SDcols = c("species", "id")]), ])
-occs_maizeShare_2018_fr[id == 247754, ]
+sum(duplicated(occs_maizeShare_2018_fr[, .SD, .SDcols = c("species", "id.x")]))
+View(occs_maizeShare_2018_fr[duplicated(occs_maizeShare_2018_fr[, .SD, .SDcols = c("species", "id.x")]), ])
+occs_maizeShare_2018_fr[id.x == 247754, ]
 
-occs_maizeShare_2018_fr <- occs_maizeShare_2018_fr[!duplicated(occs_maizeShare_2018_fr[, .SD, .SDcols = c("species", "id")]), ]
+occs_maizeShare_2018_fr <- occs_maizeShare_2018_fr[!duplicated(occs_maizeShare_2018_fr[, .SD, .SDcols = c("species", "id.x")]), ]
 occs_maizeShare_2018_fr
 
 
 # Keeping only pixels with at least 20% of arable land
 
-#
+occs_maizeShare_2018_fr_kk <- occs_maizeShare_2018_fr
 
+sum(occs_maizeShare_2018_fr$ArableLandShare < 0.2)   # removing 2681 pixels
+occs_maizeShare_2018_fr <- occs_maizeShare_2018_fr[ArableLandShare >= 0.2, ]
+occs_maizeShare_2018_fr
 
 # 
 
@@ -3738,13 +3770,11 @@ occs_maizeShare_2018_fr
 # Finding weeds potentially indicators of low intensification
 # Grouping by 10 classes of maize share 
 
-occs_maizeShare_2018_fr_kk <- occs_maizeShare_2018_fr
-
-summary(occs_maizeShare_2018_fr$Maize_share)
+summary(occs_maizeShare_2018_fr$MaizeShare)
 # See also how the total number of weeds occurrences decrease with the maize share increase
-table(cut(occs_maizeShare_2018_fr$Maize_share, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE))
+table(cut(occs_maizeShare_2018_fr$MaizeShare, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE))
 
-occs_maizeShare_2018_fr$maiz_share_class <- cut(occs_maizeShare_2018_fr$Maize_share, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE)
+occs_maizeShare_2018_fr$maiz_share_class <- cut(occs_maizeShare_2018_fr$MaizeShare, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE)
 occs_maizeShare_2018_fr
 
 sp_00 <- sort(as.vector(unlist(unique(occs_maizeShare_2018_fr[occs_maizeShare_2018_fr$maiz_share_class == "[0,0.1)", "species"]))))
@@ -3786,13 +3816,9 @@ sp_00_notOthers_fr_2018 <- sp_00[!sp_00 %in% c(sp_01) &
 sp_00_notOthers_fr_2018
 length(sp_00_notOthers_fr_2018)
 
-#[1] "Aethusa cynapium"       "Alopecurus myosuroides" "Amaranthus viridis"    
-#[4] "Atriplex patula"        "Atriplex prostrata"     "Avena fatua"           
-#[7] "Brassica rapa"          "Capsella rubella"       "Chenopodium vulvaria"  
-#[10] "Elymus repens"          "Euphorbia exigua"       "Malva parviflora"      
-#[13] "Setaria verticillata"   "Silene noctiflora"      "Sonchus arvensis"      
-#[16] "Spergula arvensis"      "Thlaspi arvense"    
-
+#[1] "Aethusa cynapium"       "Alopecurus myosuroides" "Amaranthus viridis"     "Avena fatua"            "Brassica rapa"         
+#[6] "Capsella rubella"       "Chenopodium vulvaria"   "Elymus repens"          "Euphorbia exigua"       "Lathyrus tuberosus"    
+#[11] "Malva parviflora"       "Setaria verticillata"   "Sonchus arvensis"       "Spergula arvensis"      "Thlaspi arvense"      
 
 occs_00 <- occs_maizeShare_2018_fr[occs_maizeShare_2018_fr$maiz_share_class == "[0,0.1)", ]
 occs_00
@@ -3803,6 +3829,8 @@ occs_00_indicators_fr_2018
 occs_00_indicators_fr_2018 <- table(occs_00_indicators_fr_2018$species)
 occs_00_indicators_fr_2018 <- sort(occs_00_indicators_fr_2018, decreasing = TRUE)
 occs_00_indicators_fr_2018
+#occs_00_indicators_fr_2018 <- as.data.table(occs_00_indicators_fr_2018)
+#setnames(occs_00_indicators_fr_2018, c("V1", "N"), c("Var1", "Freq"))
 write.csv(occs_00_indicators_fr_2018, file = "sp_indicators_fr_2018.csv", row.names = FALSE)
 occs_00_indicators_fr_2018 <- fread("sp_indicators_fr_2018.csv", header = TRUE)
 
@@ -3815,7 +3843,7 @@ occs_2019_specie <- unique(occs_all_2019$species)
 
 sum(occs_2019_specie %in% weeds_maize$Species)   # 150 sp
 sum(weeds_maize$Species %in% occs_2019_specie)   # 150 sp
-sum(!weeds_maize$Species %in% occs_2019_specie)   # 54 sp (maize weeds) which we don't have in 2018
+sum(!weeds_maize$Species %in% occs_2019_specie)   # 54 sp (maize weeds) which we don't have in 2019
 
 weeds_maiz_gbib <- sort(weeds_maize$Species[weeds_maize$Species %in% occs_2019_specie])
 
@@ -3823,7 +3851,7 @@ weeds_maiz_gbib <- sort(weeds_maize$Species[weeds_maize$Species %in% occs_2019_s
 occs_all_2019_maiz <- occs_all_2019[occs_all_2019$species %in% weeds_maiz_gbib, ]
 
 nrow(occs_all_2019_maiz)   # 366034 occurrences for 2019 (158427 in 2018)
-nrow(occs_all_2019)        # over 3274984 in total for 2019 (1591221 in 2018)
+nrow(occs_all_2019)        # over 3274984 in total for 2019 (1591221 in 2019)
 occs_all_2019_maiz
 
 occs_all_2019_maiz_fr <- occs_all_2019_maiz[occs_all_2019_maiz$countryCode == "FR", ]
@@ -3840,50 +3868,63 @@ occs_all_2019_maiz_fr_sf <- st_as_sf(as.data.frame(occs_all_2019_maiz_fr), coord
 occs_all_2019_maiz_fr_sf
 
 #sf::st_crs(3035)
-wkt <- sf::st_crs(3035)[[2]]
+#wkt <- sf::st_crs(3035)[[2]]
 #sp::CRS(wkt)
 
 
-occs_all_2019_maiz_fr_sf_laea <- st_transform(occs_all_2019_maiz_fr_sf, crs = sp::CRS(wkt))
-occs_all_2019_maiz_fr_sf_laea
+#occs_all_2019_maiz_fr_sf_laea <- st_transform(occs_all_2019_maiz_fr_sf, crs = sp::CRS(wkt))
+#occs_all_2019_maiz_fr_sf_laea
 
-occs_all_2019_maiz_fr_sf_laea <- st_transform(occs_all_2019_maiz_fr_sf_laea, crs = st_crs(croparea_maize_fr_1k_2019))
+occs_all_2019_maiz_fr_sf_laea <- st_transform(occs_all_2019_maiz_fr_sf, crs = st_crs(croparea_maize_fr_1k_2019))
 
 # joining maize share
 occs_maizeShare_2019_fr <- st_join(occs_all_2019_maiz_fr_sf_laea, croparea_maize_fr_1k_2019)
+names(occs_maizeShare_2019_fr) <- gsub("area", "MaizeShare", names(occs_maizeShare_2019_fr))
 occs_maizeShare_2019_fr
+
+# joining Arable land share
+occs_maizeShare_2019_fr <- st_join(occs_maizeShare_2019_fr, croparea_crop_fr_1k_2019)
+names(occs_maizeShare_2019_fr) <- gsub("area", "ArableLandShare", names(occs_maizeShare_2019_fr))
+occs_maizeShare_2019_fr
+
+
 
 occs_maizeShare_2019_fr <- as.data.table(occs_maizeShare_2019_fr)
 
 occs_maizeShare_2019_fr <- na.omit(occs_maizeShare_2019_fr)
 
 # scaling maize share
-summary(occs_maizeShare_2019_fr$area) / 1000000
+summary(occs_maizeShare_2019_fr$MaizeShare) / 1000000
+occs_maizeShare_2019_fr$MaizeShare <- occs_maizeShare_2019_fr$MaizeShare / 1000000
 
-occs_maizeShare_2019_fr$area <- occs_maizeShare_2019_fr$area / 1000000
+# scaling arable land share
+summary(occs_maizeShare_2019_fr$ArableLandShare) / 1000000
+occs_maizeShare_2019_fr$ArableLandShare <- occs_maizeShare_2019_fr$ArableLandShare / 1000000
 
-setnames(occs_maizeShare_2019_fr, "area", "Maize_share")
+#setnames(occs_maizeShare_2019_fr, "area", "MaizeShare")
 occs_maizeShare_2019_fr
 
-summary(occs_maizeShare_2019_fr$Maize_share)
+summary(occs_maizeShare_2019_fr$MaizeShare)
 length(unique(occs_maizeShare_2019_fr$species))
 sort(table(occs_maizeShare_2019_fr$species))
 
 # Removing repeated occurrences (same sp) in the same pixel, because we want to work with Species Richness
-sum(duplicated(occs_maizeShare_2019_fr[, .SD, .SDcols = c("species", "id")]))
-View(occs_maizeShare_2019_fr[duplicated(occs_maizeShare_2019_fr[, .SD, .SDcols = c("species", "id")]), ])
-occs_maizeShare_2019_fr[id == 955281, ]
+sum(duplicated(occs_maizeShare_2019_fr[, .SD, .SDcols = c("species", "id.x")]))
+View(occs_maizeShare_2019_fr[duplicated(occs_maizeShare_2019_fr[, .SD, .SDcols = c("species", "id.x")]), ])
+occs_maizeShare_2019_fr[id.x == 955281, ]
 
-occs_maizeShare_2019_fr <- occs_maizeShare_2019_fr[!duplicated(occs_maizeShare_2019_fr[, .SD, .SDcols = c("species", "id")]), ]
+occs_maizeShare_2019_fr <- occs_maizeShare_2019_fr[!duplicated(occs_maizeShare_2019_fr[, .SD, .SDcols = c("species", "id.x")]), ]
 occs_maizeShare_2019_fr
 
 
 # Keeping only pixels with at least 20% of arable land
 
-#
+occs_maizeShare_2019_fr_kk <- occs_maizeShare_2019_fr
 
+sum(occs_maizeShare_2019_fr$ArableLandShare < 0.2)   # removing 9024 pixels
+occs_maizeShare_2019_fr <- occs_maizeShare_2019_fr[ArableLandShare >= 0.2, ]
+occs_maizeShare_2019_fr
 
-# 
 
 
 # Finding weeds potentially indicators of low intensification
@@ -3891,11 +3932,11 @@ occs_maizeShare_2019_fr
 
 occs_maizeShare_2019_fr_kk <- occs_maizeShare_2019_fr
 
-summary(occs_maizeShare_2019_fr$Maize_share)
+summary(occs_maizeShare_2019_fr$MaizeShare)
 # See also how the total number of weeds occurrences decrease with the maize share increase
-table(cut(occs_maizeShare_2019_fr$Maize_share, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE))
+table(cut(occs_maizeShare_2019_fr$MaizeShare, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE))
 
-occs_maizeShare_2019_fr$maiz_share_class <- cut(occs_maizeShare_2019_fr$Maize_share, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE)
+occs_maizeShare_2019_fr$maiz_share_class <- cut(occs_maizeShare_2019_fr$MaizeShare, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE)
 occs_maizeShare_2019_fr
 
 sp_00 <- sort(as.vector(unlist(unique(occs_maizeShare_2019_fr[occs_maizeShare_2019_fr$maiz_share_class == "[0,0.1)", "species"]))))
@@ -3946,10 +3987,8 @@ length(sp_00_notOthers_fr_2019)
 #[16] "Spergula arvensis"      "Thlaspi arvense"    
 
 #2019
-#[1] "Aethusa cynapium"     "Brassica nigra"       "Chenopodium vulvaria" "Eleusine indica"     
-#[5] "Eragrostis virescens" "Euphorbia exigua"     "Malva parviflora"     "Setaria verticillata"
-#[9] "Setaria viridis"      "Tribulus terrestris"
-
+#[1] "Aethusa cynapium"     "Brassica nigra"       "Eragrostis virescens" "Euphorbia exigua"     "Setaria verticillata"
+#[6] "Tribulus terrestris"
 
 occs_00 <- occs_maizeShare_2019_fr[occs_maizeShare_2019_fr$maiz_share_class == "[0,0.1)", ]
 occs_00
@@ -3960,6 +3999,8 @@ occs_00_indicators_fr_2019
 occs_00_indicators_fr_2019 <- table(occs_00_indicators_fr_2019$species)
 occs_00_indicators_fr_2019 <- sort(occs_00_indicators_fr_2019, decreasing = TRUE)
 occs_00_indicators_fr_2019
+#occs_00_indicators_fr_2019 <- as.data.table(occs_00_indicators_fr_2019)
+#setnames(occs_00_indicators_fr_2019, c("V1", "N"), c("Var1", "Freq"))
 write.csv(occs_00_indicators_fr_2019, file = "sp_indicators_fr_2019.csv", row.names = FALSE)
 occs_00_indicators_fr_2019 <- fread("sp_indicators_fr_2019.csv", header = TRUE)
 
@@ -3978,7 +4019,7 @@ occs_2020_specie <- unique(occs_all_2020$species)
 
 sum(occs_2020_specie %in% weeds_maize$Species)   # 147 sp
 sum(weeds_maize$Species %in% occs_2020_specie)   # 147 sp
-sum(!weeds_maize$Species %in% occs_2020_specie)   # 57 sp (maize weeds) which we don't have in 2018
+sum(!weeds_maize$Species %in% occs_2020_specie)   # 57 sp (maize weeds) which we don't have in 2020
 
 weeds_maiz_gbib <- sort(weeds_maize$Species[weeds_maize$Species %in% occs_2020_specie])
 
@@ -4008,51 +4049,64 @@ occs_all_2020_maiz_fr_sf <- st_as_sf(as.data.frame(occs_all_2020_maiz_fr), coord
 occs_all_2020_maiz_fr_sf
 
 #sf::st_crs(3035)
-wkt <- sf::st_crs(3035)[[2]]
+#wkt <- sf::st_crs(3035)[[2]]
 #sp::CRS(wkt)
 
 
-occs_all_2020_maiz_fr_sf_laea <- st_transform(occs_all_2020_maiz_fr_sf, crs = sp::CRS(wkt))
-occs_all_2020_maiz_fr_sf_laea
+#occs_all_2020_maiz_fr_sf_laea <- st_transform(occs_all_2020_maiz_fr_sf, crs = sp::CRS(wkt))
+#occs_all_2020_maiz_fr_sf_laea
 
-occs_all_2020_maiz_fr_sf_laea <- st_transform(occs_all_2020_maiz_fr_sf_laea, crs = st_crs(croparea_maize_fr_1k_2020))
+occs_all_2020_maiz_fr_sf_laea <- st_transform(occs_all_2020_maiz_fr_sf, crs = st_crs(croparea_maize_fr_1k_2020))
 
 # joining maize share
 occs_maizeShare_2020_fr <- st_join(occs_all_2020_maiz_fr_sf_laea, croparea_maize_fr_1k_2020)
+names(occs_maizeShare_2020_fr) <- gsub("area", "MaizeShare", names(occs_maizeShare_2020_fr))
 occs_maizeShare_2020_fr
+
+# joining Arable land share
+occs_maizeShare_2020_fr <- st_join(occs_maizeShare_2020_fr, croparea_crop_fr_1k_2020)
+names(occs_maizeShare_2020_fr) <- gsub("area", "ArableLandShare", names(occs_maizeShare_2020_fr))
+occs_maizeShare_2020_fr
+
 
 occs_maizeShare_2020_fr <- as.data.table(occs_maizeShare_2020_fr)
 
 occs_maizeShare_2020_fr <- na.omit(occs_maizeShare_2020_fr)
 
 # scaling maize share
-summary(occs_maizeShare_2020_fr$area) / 1000000
+summary(occs_maizeShare_2020_fr$MaizeShare) / 1000000
+occs_maizeShare_2020_fr$MaizeShare <- occs_maizeShare_2020_fr$MaizeShare / 1000000
 
-occs_maizeShare_2020_fr$area <- occs_maizeShare_2020_fr$area / 1000000
+# scaling arable land share
+summary(occs_maizeShare_2020_fr$ArableLandShare) / 1000000
+occs_maizeShare_2020_fr$ArableLandShare <- occs_maizeShare_2020_fr$ArableLandShare / 1000000
 
-setnames(occs_maizeShare_2020_fr, "area", "Maize_share")
+#setnames(occs_maizeShare_2020_fr, "area", "Maize_share")
 occs_maizeShare_2020_fr
 
-summary(occs_maizeShare_2020_fr$Maize_share)
+summary(occs_maizeShare_2020_fr$MaizeShare)
+summary(occs_maizeShare_2020_fr$ArableLandShare)
 length(unique(occs_maizeShare_2020_fr$species))
 sort(table(occs_maizeShare_2020_fr$species))
 
 # Removing repeated occurrences (same sp) in the same pixel, because we want to work with Species Richness
-sum(duplicated(occs_maizeShare_2020_fr[, .SD, .SDcols = c("species", "id")]))
-View(occs_maizeShare_2020_fr[duplicated(occs_maizeShare_2020_fr[, .SD, .SDcols = c("species", "id")]), ])
-occs_maizeShare_2020_fr[id == 871690, ]
+sum(duplicated(occs_maizeShare_2020_fr[, .SD, .SDcols = c("species", "id.x")]))
+View(occs_maizeShare_2020_fr[duplicated(occs_maizeShare_2020_fr[, .SD, .SDcols = c("species", "id.x")]), ])
+occs_maizeShare_2020_fr[id.x == 871690, ]
 
-occs_maizeShare_2020_fr <- occs_maizeShare_2020_fr[!duplicated(occs_maizeShare_2020_fr[, .SD, .SDcols = c("species", "id")]), ]
+occs_maizeShare_2020_fr <- occs_maizeShare_2020_fr[!duplicated(occs_maizeShare_2020_fr[, .SD, .SDcols = c("species", "id.x")]), ]
 occs_maizeShare_2020_fr
-occs_maizeShare_2020_fr[id == 871690, ]
+occs_maizeShare_2020_fr[id.x == 871690, ]
 
 
 # Keeping only pixels with at least 20% of arable land
 
-#
+occs_maizeShare_2020_fr_kk <- occs_maizeShare_2020_fr
 
+sum(occs_maizeShare_2020_fr$ArableLandShare < 0.2)   # removing 7218 pixels
+occs_maizeShare_2020_fr <- occs_maizeShare_2020_fr[ArableLandShare >= 0.2, ]
+occs_maizeShare_2020_fr
 
-# 
 
 
 # Finding weeds potentially indicators of low intensification
@@ -4060,11 +4114,11 @@ occs_maizeShare_2020_fr[id == 871690, ]
 
 occs_maizeShare_2020_fr_kk <- occs_maizeShare_2020_fr
 
-summary(occs_maizeShare_2020_fr$Maize_share)
+summary(occs_maizeShare_2020_fr$MaizeShare)
 # See also how the total number of weeds occurrences decrease with the maize share increase
-table(cut(occs_maizeShare_2020_fr$Maize_share, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE))
+table(cut(occs_maizeShare_2020_fr$MaizeShare, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE))
 
-occs_maizeShare_2020_fr$maiz_share_class <- cut(occs_maizeShare_2020_fr$Maize_share, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE)
+occs_maizeShare_2020_fr$maiz_share_class <- cut(occs_maizeShare_2020_fr$MaizeShare, breaks = seq(0, 1, 0.1), include.lowest = TRUE, right = FALSE)
 occs_maizeShare_2020_fr
 
 sp_00 <- sort(as.vector(unlist(unique(occs_maizeShare_2020_fr[occs_maizeShare_2020_fr$maiz_share_class == "[0,0.1)", "species"]))))
@@ -4116,15 +4170,12 @@ length(sp_00_notOthers_fr_2020)
 #[16] "Spergula arvensis"      "Thlaspi arvense"    
 
 #2019
-#[1] "Aethusa cynapium"     "Brassica nigra"       "Chenopodium vulvaria" "Eleusine indica"     
-#[5] "Eragrostis virescens" "Euphorbia exigua"     "Malva parviflora"     "Setaria verticillata"
-#[9] "Setaria viridis"      "Tribulus terrestris"
+#[1] "Aethusa cynapium"     "Brassica nigra"       "Eragrostis virescens" "Euphorbia exigua"     "Setaria verticillata"
+#[6] "Tribulus terrestris"
 
 #2020
-#[1] "Alopecurus myosuroides" "Amaranthus blitoides"   "Amaranthus viridis"    
-#[4] "Atriplex patula"        "Bidens tripartita"      "Euphorbia exigua"      
-#[7] "Ranunculus arvensis"    "Thlaspi arvense"       
-
+#[1] "Aethusa cynapium"       "Alopecurus myosuroides" "Amaranthus blitoides"   "Amaranthus viridis"     "Atriplex patula"       
+#[6] "Bidens tripartita"      "Euphorbia exigua"       "Ranunculus arvensis"    "Thlaspi arvense" 
 
 
 occs_00 <- occs_maizeShare_2020_fr[occs_maizeShare_2020_fr$maiz_share_class == "[0,0.1)", ]
@@ -4136,6 +4187,8 @@ occs_00_indicators_fr_2020
 occs_00_indicators_fr_2020 <- table(occs_00_indicators_fr_2020$species)
 occs_00_indicators_fr_2020 <- sort(occs_00_indicators_fr_2020, decreasing = TRUE)
 occs_00_indicators_fr_2020
+#occs_00_indicators_fr_2020 <- as.data.table(occs_00_indicators_fr_2020)
+#setnames(occs_00_indicators_fr_2020, c("V1", "N"), c("Var1", "Freq"))
 write.csv(occs_00_indicators_fr_2020, file = "sp_indicators_fr_2020.csv", row.names = FALSE)
 occs_00_indicators_fr_2020 <- fread("sp_indicators_fr_2020.csv", header = TRUE)
 
@@ -4149,8 +4202,163 @@ occs_00_indicators_fr_2018_2020
 # EU
 occs_00_indicators <- fread("sp_indicators.csv", header = TRUE)
 
-occs_00_indicators_fr_2018_2020 <- merge(occs_00_indicators_fr_2018_2020, occs_00_indicators,
-                                         by.x = "species", by.y = "Var1", all = TRUE)
-names(occs_00_indicators_fr_2018_2020) <- c("species", "2018_FR", "2019_FR", "2020_FR", "2018_EU")
+occs_00_indicators_fr_2018_2020 <- merge(occs_00_indicators, occs_00_indicators_fr_2018_2020, 
+                                         by.x = "Var1", by.y = "species", all = TRUE)
+names(occs_00_indicators_fr_2018_2020) <- c("species", "2018_EU", "2018_FR", "2019_FR", "2020_FR")
 occs_00_indicators_fr_2018_2020
 View(occs_00_indicators_fr_2018_2020)
+
+#write.csv(occs_00_indicators_fr_2018_2020, file = "sp_indicators_fr_2018_2020_EU_2018_Arable20.csv", row.names = FALSE)
+#write.csv(occs_00_indicators_fr_2018_2020, file = "sp_indicators_fr_2018_2020_EU_2018_Arable00.csv", row.names = FALSE)
+occs_00_indicators_fr_2018_2020_Arable20 <- fread("sp_indicators_fr_2018_2020_EU_2018_Arable20.csv", header = TRUE)
+View(occs_00_indicators_fr_2018_2020_Arable20)                       
+occs_00_indicators_fr_2018_2020_Arable00 <- fread("sp_indicators_fr_2018_2020_EU_2018_Arable00.csv", header = TRUE)
+View(occs_00_indicators_fr_2018_2020_Arable00)                       
+
+
+
+# weeds described as indicators for both approaches and all years
+occs_00_indicators_fr_2018_2020_Arable00[complete.cases(occs_00_indicators_fr_2018_2020_Arable00)] # none
+occs_00_indicators_fr_2018_2020_Arable20[complete.cases(occs_00_indicators_fr_2018_2020_Arable20)] # none
+
+# weeds found as indicators in FR the 3 years of study ("regional approach")
+occs_00_indicators_fr_2018_2020_Arable00[complete.cases(occs_00_indicators_fr_2018_2020_Arable00[,3:5])] # Euphorbia exigua
+occs_00_indicators_fr_2018_2020_Arable20[complete.cases(occs_00_indicators_fr_2018_2020_Arable20[,3:5])] # Euphorbia exigua, Aethusa cynapium
+# In the EU/CropMap approach Euphorbia exigua appears in classes [0, 0.1), [0.1, 0.2) and [0.2, 0.3). Therefore,
+# the local approach wouldn't work to derive a continent-wide list.
+# Similarly, Aethusa cynapium in the EU/CropMap approach appears in classes [0, 0.1), [0.1, 0.2), [0.2, 0.3) and [0.3, 0.4)
+
+
+# Indicator sps derived with the EU/CropMap approach
+occs_00_indicators_fr_2018_2020_Arable00[!is.na(occs_00_indicators_fr_2018_2020_Arable00$`2018_EU`), ]
+occs_00_indicators_fr_2018_2020_Arable20[!is.na(occs_00_indicators_fr_2018_2020_Arable20$`2018_EU`), ]
+
+occs_maizeShare_2018_fr[species == "Tribulus terrestris", ] # none
+occs_maizeShare_2019_fr[species == "Tribulus terrestris", ] # all 2 occs in Maize share class [0,0.1)
+occs_maizeShare_2020_fr[species == "Tribulus terrestris", ] # none
+
+sort(unique(occs_all_2018_maiz[species == "Tribulus terrestris", ]$countryCode))
+occs_all_2018_maiz_fr[species == "Tribulus terrestris", ] # 21 occurrences
+
+set_distances_tol_all_2018 <- fread("distance2maize_LPIS_FR_all.csv", header = TRUE)
+range(set_distances_tol_all_2018[species == "Tribulus terrestris", ]$maize_share) # All 0% maize share
+range(set_distances_tol_all_2018[species == "Tribulus terrestris", ]$closest_field) # 2036-41441 meters to the closest maize field
+summary(set_distances_tol_all_2018[species == "Tribulus terrestris", ]$closest_field) 
+#  Min.  1st Qu.  Median    Mean   3rd Qu.    Max. 
+# 2036    4332     7093    12417   20293     41441 
+## On average, Tribulus terrestris are found 12.4km away from maize in FR-2018.
+
+
+sort(unique(occs_all_2019_maiz[species == "Tribulus terrestris", ]$countryCode))
+occs_all_2019_maiz_fr[species == "Tribulus terrestris", ] # 61 occurrences
+
+set_distances_tol_all_2019 <- fread("distance2maize_LPIS_FR_all_2019.csv", header = TRUE)
+range(set_distances_tol_all_2019[species == "Tribulus terrestris", ]$maize_share) # 0.000-0.098 maize share (2 occurrences fall in "maize pixels")
+range(set_distances_tol_all_2019[species == "Tribulus terrestris", ]$closest_field) # 53-95092 meters to the closest maize field
+summary(set_distances_tol_all_2019[species == "Tribulus terrestris", ]$closest_field) 
+#  Min.  1st Qu.  Median    Mean   3rd Qu.    Max. 
+#  53    4409     14030     20640   22612    95092  
+## On average, Tribulus terrestris are found 20.6km away from maize in FR-2019.
+
+
+sort(unique(occs_all_2020_maiz[species == "Tribulus terrestris", ]$countryCode))
+occs_all_2020_maiz_fr[species == "Tribulus terrestris", ] # 18 occurrences
+
+set_distances_tol_all_2020 <- fread("distance2maize_LPIS_FR_all_2020.csv", header = TRUE)
+range(set_distances_tol_all_2020[species == "Tribulus terrestris", ]$maize_share) # All 0% maize share
+range(set_distances_tol_all_2020[species == "Tribulus terrestris", ]$closest_field) # 618-58208 meters to the closest maize field
+summary(set_distances_tol_all_2020[species == "Tribulus terrestris", ]$closest_field) 
+#   Min. 1st Qu.  Median    Mean   3rd Qu.    Max. 
+#   618    2668    9178    13506     18221   58208 
+## On average, Tribulus terrestris are found 13.5km away from maize in FR-2020.
+## We see here one limitation of the approach: we use a 1km grid to calculate the maize share (and cropland share), but it might happen
+## that an occurrence falls in a pixel with 0% maize, but the adjacent has some maize.
+## To be completely strict, we should be calculating for each occurrence a 1km buffer, but this would do the calculations absolutely
+## not viable
+sort(set_distances_tol_all_2020[species == "Tribulus terrestris", ]$closest_field)
+sort(set_distances_tol_all_2019[species == "Tribulus terrestris", ]$closest_field) # in 2019, that happens twice
+
+
+
+# weeds found as indicators in FR at least 2 years ("regional approach")
+occs_00_indicators_fr_2018_2020_Arable20[apply(occs_00_indicators_fr_2018_2020_Arable20[, 3:5], 1, function(x) sum(!is.na(x))) %in% c(2, 3)]
+
+# weeds found as indicators in FR 2 years ("regional approach")
+occs_00_indicators_fr_2018_2020_Arable20[apply(occs_00_indicators_fr_2018_2020_Arable20[, 3:5], 1, function(x) sum(!is.na(x))) %in% c(2)]
+occs_00_indicators_fr_2018_2020_Arable20[apply(occs_00_indicators_fr_2018_2020_Arable20[, 3:5], 1, function(x) sum(!is.na(x))) %in% c(2)]$species
+#  "Alopecurus myosuroides" "Amaranthus viridis"     
+#  "Setaria verticillata"   "Thlaspi arvense"
+## From these, only Amaranthus viridis was detected as indicator with the EU/CropMap approach; 
+## the other 3 are found in several maize share classes. 
+## Therefore, the indicator species list derived with the regional approach cannot be extrapolated to a continental scale
+
+
+
+
+
+
+
+
+
+
+## Galium tricornutum GBIF occurrences historical trend ####
+
+library(PreSPickR)
+
+GetBIF(credentials = paste0(gbif_creds, "/gbif_credentials.RData"),
+       taxon_list = "Galium tricornutum",
+       download_format = "SIMPLE_CSV",
+       download_years = c(1900, 2021),
+       download_coords = c(-13, 48, 35, 72), #order: xmin, xmax, ymin, ymax
+       download_coords_accuracy = c(0, 10000),
+       rm_dupl = TRUE,
+       cols2keep = c("species", "decimalLatitude", "decimalLongitude", #"elevation",
+                     "gbifID",
+                     "coordinateUncertaintyInMeters",
+                     "countryCode", "year", 
+                     #"institutionCode",	"collectionCode",
+                     #"ownerInstitutionCode",
+                     "datasetKey"),
+       out_name = paste0("sp_records_", format(Sys.Date(), "%Y%m%d")))
+
+
+galium_all <- Prep_BIF(taxon_dir = getwd(),
+                       taxons = "Galium tricornutum",
+                       cols2keep = c("species", "decimalLatitude", "decimalLongitude", #"elevation",
+                                     "gbifID",
+                                     "coordinateUncertaintyInMeters",
+                                     "countryCode", 
+                                     #"eventDate", "day", "month",
+                                     "year", 
+                                     #"institutionCode",	"collectionCode",
+                                     #"ownerInstitutionCode",
+                                     "datasetKey"
+                       ),
+                       #cols2keep = "all",
+                       rm_dupl = TRUE)
+
+
+galium_all
+names(galium_all)
+
+galium_all <- galium_all[!duplicated(galium_all[, c(5,6,8)]), ]   # There are a lot (>500) of duplicates in FR 2020
+
+#galium_all_1 <- galium_all[coordinateUncertaintyInMeters < 10000, ]
+
+#galium_all_1 <- galium_all_1[countryCode == "GB", ]
+#galium_all_1 <- galium_all_1[countryCode == "FR", ]
+
+galium_all_1 <- galium_all
+
+table(galium_all_1$year)
+table(galium_all_1$countryCode)
+ftable(table(galium_all_1$year, galium_all_1$countryCode))
+
+galium_all_year <- data.table(table(galium_all_1$year))
+
+ggplot(galium_all_year, aes(V1, N)) +
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
