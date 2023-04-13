@@ -31,7 +31,6 @@ if(Sys.info()[4] == "D01RI1700308") {
   wd <- ""
 }else if(Sys.info()[4] %in% c("jeodpp-terminal-jd001-03", 
                               "jeodpp-terminal-03",
-                              "jeodpp-terminal-jd002-03",
                               "jeodpp-terminal-dev-12")) {
   if(!dir.exists("/eos/jeodpp/home/users/rotllxa/weeds/")) 
     dir.create("/eos/jeodpp/home/users/rotllxa/weeds/")
@@ -1504,8 +1503,6 @@ ggplot(data2plot_10km[year < 2021],
 
 
 
-## Tendency on the time series of GBIF ocurrences
-
 library(tidyverse)
 
 data2plot_10km_1 <- occs_all_indic_allYears_arable10km %>% 
@@ -1522,31 +1519,13 @@ data2plot_10km_1
 
 
 
-ggplot(data2plot_10km_1, 
-       aes(x = year, y = value, color = Occurrences)) + 
-  #geom_bar() 
-  #geom_line() +#aes(color = species)) +
-  geom_point() + #aes(color = species)) +
-  #geom_smooth(method = 'lm', se = FALSE) +
-  stat_smooth(method = 'lm', se = FALSE) +
-  #theme_minimal() +
-  theme_bw() +
-  #theme_classic() +
-  #theme_linedraw() +
-  #scale_color_viridis(option = "viridis", discrete = TRUE) +
-  #facet_wrap(~ species, nrow = 4, ncol = 3) + 
-  theme(strip.text = element_text(face = "italic"),
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  labs(x = "Year", y = "Number of occurrences in Arable Land (10km)")
-
-
-
-
-
 require(gridExtra)
 
+
+grid.arrange(plot1, plot2, ncol=2)
+
 plot1 <- ggplot(data2plot_10km_1, 
-                aes(x = year, y = value, color = Occurrences)) + 
+       aes(x = year, y = value, color = Occurrences)) + 
   #geom_col() +
   #geom_line() +#aes(color = species)) +
   geom_point() + #aes(color = species)) +
@@ -1560,121 +1539,15 @@ plot1 <- ggplot(data2plot_10km_1,
   scale_color_viridis(option = "viridis", discrete = TRUE) +
   #facet_wrap(~ species, nrow = 4, ncol = 3) + 
   theme(strip.text = element_text(face = "italic"),
-        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
-  labs(color = "Sensitive Species", x = "Year", y = "Number of occurrences")
-
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1)) +
+  labs(x = "Year", y = "log(Number of occurrences)")
 
 plot2 <- ggplot(data2plot_10km_1, 
-                aes(x = year, y = value, color = Occurrences)) + 
+       aes(x = year, y = value, color = Occurrences)) + 
   #geom_col() +
   #geom_line() +#aes(color = species)) +
   geom_point() + #aes(color = species)) +
   scale_y_log10() +
-  #geom_smooth(method = 'lm', se = FALSE) +
-  stat_smooth(method = 'lm', se = FALSE) +
-  #theme_minimal() +
-  theme_bw() +
-  #theme_classic() +
-  #theme_linedraw() +
-  scale_color_manual(labels = c("Arable Land", "Non Arable Land"), values = viridis(2)) +
-  #scale_color_viridis(option = "viridis", discrete = TRUE) +
-  #facet_wrap(~ species, nrow = 4, ncol = 3) + 
-  theme(strip.text = element_text(face = "italic"),
-        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
-  labs(color = "Sensitive Species", x = "Year", y = "log(Number of Occurrences)")
-
-
-
-jpeg("NumOccurrencesIndicTimeSeries_tendencyBoth.jpg", width = 25, height = 15, units = "cm", res = 150)
-
-grid.arrange(plot1, plot2, ncol = 2)
-
-dev.off()
-
-
-
-
-# For the non-indicator species (25 selected for the previous analysis)
-load("sp_indic_1.RData", verbose = TRUE)
-sp_indic_1
-occs_00_indicators
-occs_all
-
-sps_nonIndic <- sp_indic_1[!sp_indic_1 %in% occs_00_indicators$Var1]
-sps_nonIndic
-
-
-occs_all_nonIndic_allYears <- occs_all[species %in% sps_nonIndic]
-occs_all_nonIndic_allYears
-length(unique(occs_all_nonIndic_allYears$species))
-
-
-occs_all_nonIndic_allYears_sf <- st_as_sf(as.data.frame(occs_all_nonIndic_allYears), 
-                                          coords = c("decimalLongitude", "decimalLatitude"), 
-                                          crs = 4326)
-
-occs_all_nonIndic_allYears_sf <- st_transform(occs_all_nonIndic_allYears_sf,
-                                              crs = st_crs(cropmap2018_arabland_1km))
-
-
-
-
-occs_all_nonIndic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
-                                                                       occs_all_nonIndic_allYears_sf,
-                                                                       sp = TRUE))
-
-occs_all_nonIndic_allYears_arable10km
-nrow(occs_all_nonIndic_allYears_arable10km) # 5886
-sum(is.na(occs_all_nonIndic_allYears_arable10km$cropmap2018_ArableLand_10km))  # 112417 NAs
-sum(!is.na(occs_all_nonIndic_allYears_arable10km$cropmap2018_ArableLand_10km))  # 1205916 NAs
-
-summary(occs_all_nonIndic_allYears_arable10km$cropmap2018_ArableLand_10km)
-#    Min.   1st Qu.    Median    Mean   3rd Qu.    Max.    NA's 
-#    0.00    0.36        0.51    0.51     0.66    1.00   112417 
-
-
-sum(occs_all_nonIndic_allYears_arable10km$cropmap2018_ArableLand_10km >= 0.2, na.rm = TRUE) # 1574 (out of 5675)
-(sum(occs_all_nonIndic_allYears_arable10km$cropmap2018_ArableLand_10km >= 0.2, na.rm = TRUE) / nrow(occs_all_nonIndic_allYears_arable10km)) * 100   # 81.9% of occurrences in Arable Land (at 10km)
-
-
-data2plot_10km_1_nonIndic <- occs_all_nonIndic_allYears_arable10km %>% 
-  filter(year < 2021) %>%  
-  group_by(year) %>%
-  summarise(Occurrences_Arable = sum(cropmap2018_ArableLand_10km >= 0.2, na.rm = TRUE), 
-            Occurrences_NonArable = sum(cropmap2018_ArableLand_10km < 0.2, na.rm = TRUE)) %>%
-  pivot_longer(!year, names_to = "Occurrences") %>%
-  data.table()
-
-data2plot_10km_1_nonIndic
-
-
-plot3 <- ggplot(data2plot_10km_1_nonIndic, 
-                aes(x = year, y = value, color = Occurrences)) + 
-  #geom_col() +
-  #geom_line() +#aes(color = species)) +
-  geom_point() + #aes(color = species)) +
-  scale_y_log10() +
-  #geom_smooth(method = 'lm', se = FALSE) +
-  stat_smooth(method = 'lm', se = FALSE) +
-  #theme_minimal() +
-  theme_bw() +
-  #theme_classic() +
-  #theme_linedraw() +
-  #scale_color_viridis(option = "viridis", discrete = TRUE) +
-  #scale_fill_discrete(labels = c('Arable Land', 'Non Arable Land')) +
-  scale_color_manual(labels = c("Arable Land", "Non Arable Land"), values = viridis(2)) +
-  #facet_wrap(~ species, nrow = 4, ncol = 3) + 
-  theme(strip.text = element_text(face = "italic"),
-        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
-  labs(color = "Non Sensitive Species", x = "Year", y = "log(Number of Occurrences)")
-
-
-plot4 <- ggplot(data2plot_10km_1_nonIndic, 
-                aes(x = year, y = value, color = Occurrences)) + 
-  #geom_col() +
-  #geom_line() +#aes(color = species)) +
-  geom_point() + #aes(color = species)) +
-  #scale_y_log10() +
   #geom_smooth(method = 'lm', se = FALSE) +
   stat_smooth(method = 'lm', se = FALSE) +
   #theme_minimal() +
@@ -1684,138 +1557,17 @@ plot4 <- ggplot(data2plot_10km_1_nonIndic,
   scale_color_viridis(option = "viridis", discrete = TRUE) +
   #facet_wrap(~ species, nrow = 4, ncol = 3) + 
   theme(strip.text = element_text(face = "italic"),
-        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
-  labs(color = "Non Sensitive Species", x = "Year", y = "Number of occurrences")
-
-plot4
-plot3
-plot2
-
-
-data2plot_10km_1_all <- merge(data2plot_10km_1_nonIndic, data2plot_10km_1, all = TRUE,
-                              by = c("year", "Occurrences"))
-
-setnames(data2plot_10km_1_all, c("value.x", "value.y"), c("occs_nonIndic", "occs_Indic"))
-data2plot_10km_1_all
-
-data2plot_10km_1_all_2plot <- data2plot_10km_1_all %>%
-  pivot_longer(!c(year, Occurrences), names_to = "Indic_NonIndic") %>%
-  unite("ArableNonArable_IndicNonIndic", Occurrences:Indic_NonIndic, remove = TRUE) %>%
-  mutate_if(is.character, str_replace_all, pattern = "Occurrences_", replacement = "") %>%
-  mutate_if(is.character, str_replace_all, pattern = "occs_", replacement = "") %>%
-  #arrange(year, value) %>%
-  mutate(ArableNonArable_IndicNonIndic = factor(ArableNonArable_IndicNonIndic, levels = c("Arable_nonIndic", "NonArable_nonIndic", "Arable_Indic", "NonArable_Indic"))) %>%
-  data.table()
-
-data2plot_10km_1_all_2plot
-
-
-plot5 <- ggplot(data2plot_10km_1_all_2plot, 
-                aes(x = year, y = value, color = ArableNonArable_IndicNonIndic)) + 
-  #geom_col() +
-  #geom_line() +#aes(color = species)) +
-  geom_point() + #aes(color = species)) +
-  scale_y_log10() +
-  #geom_smooth(method = 'lm', se = FALSE) +
-  stat_smooth(method = 'lm', se = FALSE) +
-  #theme_minimal() +
-  theme_bw() +
-  #theme_classic() +
-  #theme_linedraw() +
-  #scale_color_viridis(option = "viridis", discrete = TRUE) +
-  #scale_color_viridis(option = "magma", discrete = TRUE) +
-  scale_color_viridis(option = "plasma", discrete = TRUE) +
-  #facet_wrap(~ species, nrow = 4, ncol = 3) + 
-  theme(strip.text = element_text(face = "italic"),
-        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1)) +
   labs(x = "Year", y = "log(Number of occurrences)")
 
 
-plot6 <- ggplot(data2plot_10km_1_all_2plot, 
-                aes(x = year, y = value, color = ArableNonArable_IndicNonIndic)) + 
-  #geom_col() +
-  #geom_line() +#aes(color = species)) +
-  geom_point() + #aes(color = species)) +
-  #scale_y_log10() +
-  #geom_smooth(method = 'lm', se = FALSE) +
-  stat_smooth(method = 'lm', se = FALSE) +
-  #theme_minimal() +
-  theme_bw() +
-  #theme_classic() +
-  #theme_linedraw() +
-  #scale_color_viridis(option = "viridis", discrete = TRUE) +
-  #scale_color_viridis(option = "magma", discrete = TRUE) +
-  scale_color_viridis(option = "plasma", discrete = TRUE) +
-  #facet_wrap(~ species, nrow = 4, ncol = 3) + 
-  theme(strip.text = element_text(face = "italic"),
-        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
-  labs(x = "Year", y = "Number of occurrences")
-
-
 
 #
 
-jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyBoth.jpg", width = 25, height = 25, units = "cm", res = 300)
-grid.arrange(plot6, plot5, ncol = 1)
-dev.off()
-
-jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyBoth_separated.jpg", width = 25, height = 15, units = "cm", res = 300)
-grid.arrange(plot1, plot2, plot4, plot3, ncol = 2)
-dev.off()
-
-jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyLog.jpg", width = 25, height = 25, units = "cm", res = 300)
-grid.arrange(plot2, plot3, ncol = 1)
-dev.off()
 
 
 
 
-data2plot_10km_1_all_2plot_2 <- data2plot_10km_1_all %>%
-  pivot_longer(!c(year, Occurrences), names_to = "Indic_NonIndic") %>%
-  mutate_if(is.character, str_replace_all, pattern = "Occurrences_", replacement = "") %>%
-  mutate_if(is.character, str_replace_all, pattern = "occs_", replacement = "") %>%
-  mutate_if(is.character, str_replace_all, pattern = "nonIndic", replacement = "Non Sensitive Species") %>%
-  mutate_if(is.character, str_replace_all, pattern = "Indic", replacement = "Sensitive Species") %>%
-  data.table()
-
-data2plot_10km_1_all_2plot_2
-
-
-
-#jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyLog_2.jpg", width = 25, height = 25, units = "cm", res = 300)
-jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyLog_2_R2.jpg", width = 25, height = 25, units = "cm", res = 300)
-
-ggplot(data2plot_10km_1_all_2plot_2, 
-       aes(x = year, y = value, color = Occurrences)) + 
-  geom_point() + #aes(color = species)) +
-  scale_y_log10() +
-  ##
-  #stat_smooth(method = 'lm', se = FALSE) +
-  #ggpubr::stat_cor(method = "pearson") +
-  ##
-  ggpmisc::stat_poly_line(se = FALSE) +
-  ggpmisc::stat_poly_eq(aes(label = paste(#after_stat(eq.label),
-                                          after_stat(rr.label),
-                                          after_stat(p.value.label), sep = "*\", \"*"))) +
-  ##
-  #theme_minimal() +
-  theme_bw() +
-  #theme_classic() +
-  #theme_linedraw() +
-  #scale_color_viridis(option = "viridis", discrete = TRUE) +
-  #scale_fill_discrete(labels = c('Arable Land', 'Non Arable Land')) +
-  scale_color_manual(labels = c("Arable Land", "Non Arable Land"), values = viridis(2)) +
-  facet_wrap(~ Indic_NonIndic, nrow = 2, ncol = 1
-             , scales = "free_y") + 
-             #) + 
-  theme(strip.text = element_text(face = "italic"),
-        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
-  labs(color = " ", x = "Year", y = "log(Number of Occurrences)")
-
-dev.off()
-
-
-#
 
 
 
