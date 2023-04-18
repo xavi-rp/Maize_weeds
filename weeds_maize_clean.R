@@ -12,7 +12,7 @@ library(ggplot2)
 library(ggpubr)
 library(viridis)
 library(tidyverse)
-require(gridExtra)
+library(gridExtra)
 
 
 
@@ -173,6 +173,7 @@ cropmap2018_arabland_1km <- raster("cropmap2018_ArableLand_1km.tif")
 cropmap2018_maiz_1km$cropmap2018_arabland_1km <- getValues(cropmap2018_arabland_1km)
 cropmap2018_maiz_1km
 
+
 cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
                                        fact = 1000,        # 10km
                                        fun = aggr_ArabLand_10km, 
@@ -184,6 +185,59 @@ cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
 
 cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km.tif")
 
+
+
+
+### Plotting maps and histograms ####
+
+cropmap2018_maiz_1km
+
+cropmap2018_maiz_1km_map_pts <- rasterToPoints(cropmap2018_maiz_1km[["cropmap2018_maiz_1km"]], spatial = TRUE)
+cropmap2018_maiz_1km_map_df <- data.frame(cropmap2018_maiz_1km_map_pts)
+cropmap2018_maiz_1km_map_df_1 <- cropmap2018_maiz_1km_map_df %>% 
+  mutate(across(c(x, y), round, digits = 4)) %>% 
+  data.table()
+cropmap2018_maiz_1km_map_df_1[, maize_share_class := cut(cropmap2018_maiz_1km_map_df_1$cropmap2018_maiz_1km,
+                                                         breaks = seq(0, 1, 0.1),
+                                                         include.lowest = TRUE,
+                                                         right = FALSE)] 
+
+
+## Gisco maps: https://ropengov.github.io/giscoR/
+
+eur_gisco <- giscoR::gisco_get_countries(region = "Europe", epsg = "3035")
+eur_gisco <- st_crop(eur_gisco, xmin = 2413239, xmax = 6574239, ymin = 1269941, ymax = 5493941)
+
+
+map <- ggplot() +
+  geom_sf(data = eur_gisco) +
+  geom_raster(data = cropmap2018_maiz_1km_map_df_1, aes(x, y, fill = maize_share_class), 
+              show.legend = FALSE)+
+  theme_bw() +
+  labs(x = "", y = "") +
+  ggsn::north(data = eur_gisco, symbol = 3, location = "topright", scale = 0.1) +
+  ggsn::scalebar(data = eur_gisco, dist = 500, dist_unit = "km", st.size = 3, 
+           transform = FALSE, st.bottom = FALSE,
+           height = 0.01, 
+           location = "bottomleft", model = "GRS80") +
+  scale_fill_viridis(option = "rocket", #"plasma", 
+                     discrete = TRUE, direction = -1, name = "Maize share class") 
+
+
+freq <- ggplot(data = cropmap2018_maiz_1km_map_df_1) + 
+  geom_bar(aes(x = maize_share_class, fill = maize_share_class)) +
+  theme_bw() +
+  labs(x = "", y = "") +
+  scale_fill_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Maize share class") +
+  theme(axis.text = element_text(size = 8), 
+        axis.text.x = element_text(angle = -45, hjust = 0)) 
+  
+
+png("MaizeShareMap.png",
+    width = 25, height = 15, units = "cm", res = 150)
+grid.arrange(map, freq, ncol = 2, widths = c(0.6, 0.4))
+dev.off()
+#
 
 
 ## EUCropMap against Agricultural Management Intensity Map (Rega et al., 2020) ####
@@ -311,7 +365,7 @@ occs_all <- Prep_BIF(taxon_dir = paste0(taxon_dir, "/"),
                      rm_dupl = TRUE)
 
 
-occs_all <- fread(paste0(getwd(), "/../exploring_lucas_data/D5_FFGRCC_gbif_occ/sp_records_20210709.csv"), header = TRUE)
+#occs_all <- fread(paste0(getwd(), "/../exploring_lucas_data/D5_FFGRCC_gbif_occ/sp_records_20210709.csv"), header = TRUE)
 if(nchar(occs_all$sp2[1]) == 7) occs_all[, sp2 := gsub(" ", "_", occs_all$species)]
 occs_all
 cols_order <- c("species", "decimalLatitude", "decimalLongitude", "gbifID", "countryCode", "year", "sp2")
@@ -394,7 +448,7 @@ summary(occs_maizeShare_1$cropmap2018_maiz_1km)
 
 
 
-## Assessing correlations ####
+## Sp Richness vs Maize/cropland share ####
 
 png("scatterplot_SpRichness_maize_1.png",  
     width = 16, height = 15, units = "cm", res = 150)
@@ -456,11 +510,58 @@ dev.off()
 
 
 
+## Plotting a map for species richness
+
+occs_all_2018_maiz_sf_laea
+occs_maizeShare
+
+spRichness_sf <- st_set_geometry(occs_maizeShare[!duplicated(occs_maizeShare$cells)], value = "geometry")
+spRichness_dt <- data.table(data.table(spRichness_sf), st_coordinates(spRichness_sf))
+str(spRichness_dt)
+length(unique(spRichness_dt$geometry))
+length(unique(spRichness_dt$cells))
+
+
+
+map <- ggplot() +
+  geom_sf(data = eur_gisco) +
+  geom_raster(data = spRichness_dt[!duplicated(spRichness_dt$geometry)], aes(X, Y, fill = N), 
+              show.legend = FALSE) +
+  theme_bw() +
+  labs(x = "", y = "") +
+  ggsn::north(data = eur_gisco, symbol = 3, location = "topright", scale = 0.1) +
+  ggsn::scalebar(data = eur_gisco, dist = 500, dist_unit = "km", st.size = 3, 
+                 transform = FALSE, st.bottom = FALSE,
+                 height = 0.01, 
+                 location = "bottomleft", model = "GRS80") +
+  scale_fill_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Maize share class") 
+
+
+freq <- ggplot(data = cropmap2018_maiz_1km_map_df_1) + 
+  geom_bar(aes(x = maize_share_class, fill = maize_share_class)) +
+  theme_bw() +
+  labs(x = "", y = "") +
+  scale_fill_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Maize share class") +
+  theme(axis.text = element_text(size = 8), 
+        axis.text.x = element_text(angle = -45, hjust = 0)) 
+
+
+png("MaizeShareMap.png",
+    width = 25, height = 15, units = "cm", res = 150)
+grid.arrange(map, freq, ncol = 2, widths = c(0.6, 0.4))
+dev.off()
+#
+
+
+
+
+
 ## Finding weeds potentially indicators of low intensification ####
 ## Grouping by 10 classes of maize share 
 occs_maizeShare <- merge(occs_maizeShare, occs_maizeShare_1[, .SD, .SDcols = c("cells", "N", "maize_share_class")], by = "cells", all.x = TRUE)
 fwrite(occs_maizeShare, file = "/eos/jeodpp/home/users/rotllxa/weeds/occs_maizeShare.csv", row.names = FALSE, quote = TRUE)
 occs_maizeShare <- fread("/eos/jeodpp/home/users/rotllxa/weeds/occs_maizeShare.csv", header = TRUE)
+
 
 
 sp_00 <- sort(as.vector(unlist(unique(occs_maizeShare[occs_maizeShare$maize_share_class == "[0,0.1)", "species"]))))
@@ -734,7 +835,7 @@ dev.off()
 
 
 
-## Mapping against Agricultural land share
+## Mapping against Cropland share
 
 occs_all_indic_allYears
 #cropmap2018_arabland_1km <- raster("cropmap2018_ArableLand_1km.tif")
@@ -755,7 +856,7 @@ occs_all_indic_allYears_arable1km <- as.data.table(raster::extract(cropmap2018_a
 occs_all_indic_allYears_arable1km
 
 
-## Arable land: 10 km
+## Cropland: 10 km
 occs_all_indic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
                                                                     occs_all_indic_allYears_sf,
                                                                     sp = TRUE))
