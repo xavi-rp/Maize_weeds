@@ -215,6 +215,7 @@ map <- ggplot() +
               show.legend = FALSE)+
   theme_bw() +
   labs(x = "", y = "") +
+  theme(axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5)) +
   ggsn::north(data = eur_gisco, symbol = 3, location = "topright", scale = 0.1) +
   ggsn::scalebar(data = eur_gisco, dist = 500, dist_unit = "km", st.size = 3, 
            transform = FALSE, st.bottom = FALSE,
@@ -223,18 +224,27 @@ map <- ggplot() +
   scale_fill_viridis(option = "rocket", #"plasma", 
                      discrete = TRUE, direction = -1, name = "Maize share class") 
 
+#pct <- cropmap2018_maiz_1km_map_df_1 %>% 
+#  count(msc = maize_share_class) %>% 
+#  mutate(pct = round(prop.table(n), 3))
 
 freq <- ggplot(data = cropmap2018_maiz_1km_map_df_1) + 
   geom_bar(aes(x = maize_share_class, fill = maize_share_class)) +
+  geom_text(aes(x = maize_share_class, label = paste0(round(..count../sum(..count..)*100, 2), "%")),
+            stat = "count",
+            vjust = - 0.4, 
+            hjust = 0,
+            size = 2, 
+            angle = 45) + 
   theme_bw() +
-  labs(x = "", y = "") +
+  labs(x = "", y = "Number of cells") +
   scale_fill_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Maize share class") +
   theme(axis.text = element_text(size = 8), 
         axis.text.x = element_text(angle = -45, hjust = 0)) 
   
 
 png("MaizeShareMap.png",
-    width = 25, height = 15, units = "cm", res = 150)
+    width = 26, height = 15, units = "cm", res = 150)
 grid.arrange(map, freq, ncol = 2, widths = c(0.6, 0.4))
 dev.off()
 #
@@ -512,20 +522,27 @@ dev.off()
 
 ## Plotting a map for species richness
 
-occs_all_2018_maiz_sf_laea
+cropmap2018_maiz_1km
 occs_maizeShare
 
 spRichness_sf <- st_set_geometry(occs_maizeShare[!duplicated(occs_maizeShare$cells)], value = "geometry")
-spRichness_dt <- data.table(data.table(spRichness_sf), st_coordinates(spRichness_sf))
-str(spRichness_dt)
-length(unique(spRichness_dt$geometry))
-length(unique(spRichness_dt$cells))
+
+spRichness_sf_1km <- cropmap2018_maiz_1km[["cropmap2018_maiz_1km"]]
+spRichness_sf_1km <- setValues(spRichness_sf_1km, values = NA)
+names(spRichness_sf_1km) <- "Species_Richness"
+spRichness_sf_1km[spRichness_sf$cells] <-  spRichness_sf$N
+
+spRichness_sf_1km_map_pts <- rasterToPoints(spRichness_sf_1km, spatial = TRUE)
+spRichness_sf_1km_map_df <- data.frame(spRichness_sf_1km_map_pts)
+spRichness_sf_1km_map_df_1 <- spRichness_sf_1km_map_df %>% 
+  data.table()
+spRichness_sf_1km_map_df_1$Species_Richness <- factor(spRichness_sf_1km_map_df_1$Species_Richness, levels = sort(unique(spRichness_sf_1km_map_df_1$Species_Richness)))
+str(spRichness_sf_1km_map_df_1)
 
 
-
-map <- ggplot() +
+map1 <- ggplot() +
   geom_sf(data = eur_gisco) +
-  geom_raster(data = spRichness_dt[!duplicated(spRichness_dt$geometry)], aes(X, Y, fill = N), 
+  geom_raster(data = spRichness_sf_1km_map_df_1, aes(x, y, fill = Species_Richness), 
               show.legend = FALSE) +
   theme_bw() +
   labs(x = "", y = "") +
@@ -534,22 +551,22 @@ map <- ggplot() +
                  transform = FALSE, st.bottom = FALSE,
                  height = 0.01, 
                  location = "bottomleft", model = "GRS80") +
-  scale_fill_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Maize share class") 
+  scale_color_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Species Richness") 
 
 
-freq <- ggplot(data = cropmap2018_maiz_1km_map_df_1) + 
-  geom_bar(aes(x = maize_share_class, fill = maize_share_class)) +
+freq1 <- ggplot(data = spRichness_sf_1km_map_df_1) + 
+  geom_bar(aes(x = Species_Richness, fill = Species_Richness)) +
   theme_bw() +
   labs(x = "", y = "") +
-  scale_fill_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Maize share class") +
+  scale_fill_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Species Richness") +
   theme(axis.text = element_text(size = 8), 
         axis.text.x = element_text(angle = -45, hjust = 0)) 
 
 
-png("MaizeShareMap.png",
-    width = 25, height = 15, units = "cm", res = 150)
-grid.arrange(map, freq, ncol = 2, widths = c(0.6, 0.4))
-dev.off()
+#png("Species_RichnessMap.png",
+#    width = 25, height = 15, units = "cm", res = 150)
+grid.arrange(map1, freq1, ncol = 2, widths = c(0.6, 0.4))
+#dev.off()
 #
 
 
