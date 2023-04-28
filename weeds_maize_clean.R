@@ -42,7 +42,8 @@ setwd(wd)
 
 ## Crop Map ####
 
-cropmap2018 <- raster("/mnt/cidstorage/cidportal/data/OpenData/EUCROPMAP/2018/EUCROPMAP_2018.tif")  # at 10m
+#cropmap2018 <- raster("/mnt/cidstorage/cidportal/data/OpenData/EUCROPMAP/2018/EUCROPMAP_2018.tif")  # at 10m
+cropmap2018 <- raster("/scratch/rotllxa/EUCROPMAP_2018.tif")  # at 10m
 cropmap2018
 
 ## CropMap classes
@@ -164,9 +165,17 @@ cropmap2018_arabland_1km <- aggregate(x = cropmap2018,
 wkt <- sf::st_crs(3035)[[2]]
 crs(cropmap2018_arabland_1km) <- sp::CRS(wkt)
 
-
-cropmap2018_nal_1km <- raster("cropmap2018_NonAL_1km.tif")
 cropmap2018_arabland_1km <- raster("cropmap2018_ArableLand_1km.tif")
+
+
+## cropland vs non-cropland area
+cropmap2018_arabland_1km_vals <- getValues(cropmap2018_arabland_1km)  
+cropmap2018_arabland_1km_vals <- cropmap2018_arabland_1km_vals[!is.na(cropmap2018_arabland_1km_vals)]
+
+(sum(cropmap2018_arabland_1km_vals < 0.2) * 100) / length(cropmap2018_arabland_1km_vals)  
+(sum(cropmap2018_arabland_1km_vals >= 0.2) * 100) / length(cropmap2018_arabland_1km_vals)
+# 66% Non-Cropland vs 34% Cropland
+
 
 
 ## Merging (rasters) maize share and arable land share
@@ -179,12 +188,41 @@ cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
                                        fun = aggr_ArabLand_10km, 
                                        expand = TRUE, 
                                        na.rm = TRUE, 
-                                       filename = "cropmap2018_ArableLand_10km.tif",
-                                       #filename = "",
+                                       #filename = "cropmap2018_ArableLand_10km_new.tif",
+                                       filename = "",
                                        overwrite = TRUE)
 
-cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km.tif")
+#cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km.tif")
+cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km_new.tif")
+names(cropmap2018_arabland_10km)
+plot(cropmap2018_arabland_10km)
 
+
+## recall cropmap2018_arabland_10km from Raph's data set
+library(RPostgreSQL)
+pg <- list(host = 'jeodb01.cidsn.jrc.it', port = '54331', # PG server parameters
+           user = 'refocus_eucropmap_user', pwd = '8gsmuTJUj2xKrHbf',
+           db = 'refocus_eucropmap_db')
+con <- dbDriver("PostgreSQL") %>% # connect
+  dbConnect(host=pg$host, port=pg$port, user=pg$user, password=pg$pwd, dbname=pg$db)
+
+tmp <- paste0("SELECT * FROM \"cdiv\".","crop_div_10km_geom AS a")
+cropmap2018_arabland_10km <- st_read(con, query = tmp)
+
+cropmap2018_arabland_10km
+summary(round((cropmap2018_arabland_10km$cropland_sum / 10^6), 3))
+
+plot(cropmap2018_arabland_10km)
+
+
+## cropland vs non-cropland area
+#cropmap2018_arabland_10km_vals <- getValues(cropmap2018_arabland_10km)  
+cropmap2018_arabland_10km_vals <- round((cropmap2018_arabland_10km$cropland_sum / 10^6), 3)  
+#cropmap2018_arabland_10km_vals <- cropmap2018_arabland_10km_vals[!is.na(cropmap2018_arabland_10km_vals)]
+
+(sum(cropmap2018_arabland_10km_vals < 0.2) * 100) / length(cropmap2018_arabland_10km_vals) 
+(sum(cropmap2018_arabland_10km_vals >= 0.2) * 100) / length(cropmap2018_arabland_10km_vals)
+# 64% Non-Cropland vs 36% Cropland
 
 
 
@@ -546,27 +584,34 @@ map1 <- ggplot() +
               show.legend = FALSE) +
   theme_bw() +
   labs(x = "", y = "") +
+  theme(axis.text.y = element_text(angle = 90, vjust = 0.5, hjust = 0.5)) +
   ggsn::north(data = eur_gisco, symbol = 3, location = "topright", scale = 0.1) +
   ggsn::scalebar(data = eur_gisco, dist = 500, dist_unit = "km", st.size = 3, 
                  transform = FALSE, st.bottom = FALSE,
                  height = 0.01, 
                  location = "bottomleft", model = "GRS80") +
-  scale_color_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Species Richness") 
+  scale_fill_viridis(option = "turbo", discrete = TRUE, direction = -1, name = "Species Richness") 
 
 
 freq1 <- ggplot(data = spRichness_sf_1km_map_df_1) + 
   geom_bar(aes(x = Species_Richness, fill = Species_Richness)) +
+  geom_text(aes(x = Species_Richness, label = paste0(round(..count../sum(..count..)*100, 2), "%")),
+            stat = "count",
+            vjust = - 0.4, 
+            hjust = 0,
+            size = 2, 
+            angle = 45) + 
   theme_bw() +
-  labs(x = "", y = "") +
-  scale_fill_viridis(option = "rocket", discrete = TRUE, direction = -1, name = "Species Richness") +
+  labs(x = "", y = "Number of cells") +
+  scale_fill_viridis(option = "turbo", discrete = TRUE, direction = -1, name = "Species Richness") +
   theme(axis.text = element_text(size = 8), 
         axis.text.x = element_text(angle = -45, hjust = 0)) 
 
 
-#png("Species_RichnessMap.png",
-#    width = 25, height = 15, units = "cm", res = 150)
+png("Species_RichnessMap.png",
+    width = 25, height = 15, units = "cm", res = 150)
 grid.arrange(map1, freq1, ncol = 2, widths = c(0.6, 0.4))
-#dev.off()
+dev.off()
 #
 
 
@@ -789,7 +834,7 @@ dev.off()
 occs_00_indicators
 occs_all
 
-occs_all_indic_allYears <- occs_all[species %in% names(occs_00_indicators)]
+occs_all_indic_allYears <- occs_all[species %in% occs_00_indicators$Var1]
 occs_all_indic_allYears
 
 occs2plot <- occs_all_indic_allYears %>% 
@@ -799,7 +844,7 @@ occs2plot <- occs_all_indic_allYears %>%
 
 occs2plot
 occs2plot$year <- as.factor(occs2plot$year)
-occs2plot$species <- factor(occs2plot$species, levels = names(occs_00_indicators))
+occs2plot$species <- factor(occs2plot$species, levels = occs_00_indicators$Var1)
 str(occs2plot)
 
 
@@ -834,7 +879,7 @@ occs_all_indic_country <- occs_all_indic_allYears %>%
 occs_all_indic_country
 
 
-occs_all_indic_country$species <- factor(occs_all_indic_country$species, levels = names(occs_00_indicators))
+occs_all_indic_country$species <- factor(occs_all_indic_country$species, levels = occs_00_indicators$Var1)
 
 jpeg("NumOccurrencesIndicCountry.jpg", width = 25, height = 25, units = "cm", res = 150)
 
@@ -863,7 +908,7 @@ occs_all_indic_allYears_sf <- st_as_sf(as.data.frame(occs_all_indic_allYears),
                                        crs = 4326)
 
 occs_all_indic_allYears_sf <- st_transform(occs_all_indic_allYears_sf,
-                                           crs = st_crs(cropmap2018_arabland_1km))
+                                           crs = st_crs(cropmap2018_arabland_10km))
 
 
 occs_all_indic_allYears_arable1km <- as.data.table(raster::extract(cropmap2018_arabland_1km,
@@ -874,11 +919,16 @@ occs_all_indic_allYears_arable1km
 
 
 ## Cropland: 10 km
-occs_all_indic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
-                                                                    occs_all_indic_allYears_sf,
-                                                                    sp = TRUE))
+#occs_all_indic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
+#                                                                    occs_all_indic_allYears_sf,
+#                                                                    sp = TRUE))
 
-occs_all_indic_allYears_arable10km
+cropmap2018_arabland_10km <- cropmap2018_arabland_10km["cropland_sum"]
+
+occs_all_indic_allYears_arable10km <- as.data.table(st_intersection(cropmap2018_arabland_10km["cropland_sum"],
+                                                                    occs_all_indic_allYears_sf))
+
+occs_all_indic_allYears_arable10km[, cropmap2018_ArableLand_10km := round((cropland_sum/10^6), 3)]
 
 
 data2plot_10km <- occs_all_indic_allYears_arable10km[cropmap2018_ArableLand_10km >= 0.2] %>% 
@@ -947,7 +997,7 @@ sp_indic_1
 occs_00_indicators
 occs_all
 
-sps_nonIndic <- sp_indic_1[!sp_indic_1 %in% names(occs_00_indicators)]
+sps_nonIndic <- sp_indic_1[!sp_indic_1 %in% occs_00_indicators$Var1]
 
 occs_all_nonIndic_allYears <- occs_all[species %in% sps_nonIndic]
 
@@ -956,12 +1006,15 @@ occs_all_nonIndic_allYears_sf <- st_as_sf(as.data.frame(occs_all_nonIndic_allYea
                                           crs = 4326)
 
 occs_all_nonIndic_allYears_sf <- st_transform(occs_all_nonIndic_allYears_sf,
-                                              crs = st_crs(cropmap2018_arabland_1km))
+                                              crs = st_crs(cropmap2018_arabland_10km))
 
-occs_all_nonIndic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
-                                                                       occs_all_nonIndic_allYears_sf,
-                                                                       sp = TRUE))
+#occs_all_nonIndic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
+#                                                                       occs_all_nonIndic_allYears_sf,
+#                                                                       sp = TRUE))
+occs_all_nonIndic_allYears_arable10km <- as.data.table(st_intersection(cropmap2018_arabland_10km["cropland_sum"],
+                                                                    occs_all_nonIndic_allYears_sf))
 
+occs_all_nonIndic_allYears_arable10km[, cropmap2018_ArableLand_10km := round((cropland_sum/10^6), 3)]
 occs_all_nonIndic_allYears_arable10km
 
 data2plot_10km_1_nonIndic <- occs_all_nonIndic_allYears_arable10km %>% 
@@ -994,10 +1047,33 @@ data2plot_10km_1_all_2plot_2 <- data2plot_10km_1_all %>%
 data2plot_10km_1_all_2plot_2
 
 
+range(data2plot_10km_1_all_2plot_2$value)         # 1 - 104346
+range(log10(data2plot_10km_1_all_2plot_2$value))  # 0.000000 - 5.018476
 
-jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyLog_2_R2.jpg", width = 25, height = 25, units = "cm", res = 300)
+data2plot_10km_1_all_2plot_2 %>%
+  ggplot(aes(x = log10(value))) +
+  geom_histogram() +
+  theme_bw()
 
-ggplot(data2plot_10km_1_all_2plot_2, 
+
+
+p1 <- ggplot(data2plot_10km_1_all_2plot_2, 
+       aes(x = year, y = value, color = Occurrences)) + 
+  geom_point() + 
+  #scale_y_log10() +
+  ggpmisc::stat_poly_line(se = FALSE) +
+  ggpmisc::stat_poly_eq(aes(label = paste(
+    after_stat(rr.label),
+    after_stat(p.value.label), sep = "*\", \"*"))) +
+  theme_bw() +
+  scale_color_manual(labels = c("Cropland", "Non-Cropland"), values = viridis(10)[c(1,7)]) +
+  facet_wrap(~ Indic_NonIndic, nrow = 2, ncol = 1
+             , scales = "free_y") + 
+  theme(strip.text = element_text(face = "italic"),
+        axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
+  labs(color = " ", x = "Year", y = "Number of Occurrences")
+
+p2 <- ggplot(data2plot_10km_1_all_2plot_2, 
        aes(x = year, y = value, color = Occurrences)) + 
   geom_point() + 
   scale_y_log10() +
@@ -1013,7 +1089,221 @@ ggplot(data2plot_10km_1_all_2plot_2,
         axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5)) +
   labs(color = " ", x = "Year", y = "log(Number of Occurrences)")
 
+
+jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyLog_2_R2_kk.jpg", width = 30, height = 20, units = "cm", res = 300)
+grid.arrange(p1, p2, ncol=2)
 dev.off()
+
+
+jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyLog_2_R2.jpg", width = 25, height = 25, units = "cm", res = 300)
+p1
+dev.off()
+
+
+
+### Slope differences
+
+data2plot_10km_1_all_2plot_2
+setnames(data2plot_10km_1_all_2plot_2, 
+         c("year", "Occurrences", "Indic_NonIndic", "value"), 
+         c("Year", "Ecosystem", "SpeciesSensitivity", "NumOccurrences"))
+
+
+
+## Non Sensitive species
+
+data4lm <- data2plot_10km_1_all_2plot_2[SpeciesSensitivity == "Non Sensitive Species"]
+
+#data4lm %>%
+#  ggplot(aes(x = value, fill = Ecosystem)) +
+#  geom_histogram(position = 'identity') +
+#  scale_fill_manual(labels = c("Cropland", "Non-Cropland"), values = viridis(10)[c(1,7)]) +
+#  theme_bw() +
+#  labs(fill = "") +
+#  facet_wrap(~ Ecosystem, nrow = 1, ncol = 2) 
+
+
+summary(lm(data = data4lm[Ecosystem == "Cropland"], Year ~ log10(NumOccurrences)))
+summary(lm(data = data4lm[Ecosystem == "Cropland"], NumOccurrences ~ Year))  # Adjusted R-squared:  0.5093 
+                                                                             # p-value: 0.0001689
+
+summary(lm(data = data4lm[Ecosystem == "NonCropland"], Year ~ NumOccurrences))  # Adjusted R-squared:  0.5592 
+                                                                                # p-value: 5.881e-05
+
+
+anova(lm(NumOccurrences ~ Year + Ecosystem, data = data4lm), lm(NumOccurrences ~ Year * Ecosystem, data = data4lm))
+# Analysis of Variance Table
+# Model 1: NumOccurrences ~ Year + Ecosystem
+# Model 2: NumOccurrences ~ Year * Ecosystem
+# Res.Df        RSS Df Sum of Sq     F Pr(>F)
+# 1     39 1.0842e+10                          
+# 2     38 1.0808e+10  1  34409519 0.121 0.7299
+
+# There is no interaction effect between Year and Ecosystem, it can be removed from the model 
+
+
+summary(lm(data = data4lm, log10(NumOccurrences) ~ Year*Ecosystem))
+summary(lm(data = data4lm, NumOccurrences ~ Year * Ecosystem))
+summary(lm(data = data4lm, NumOccurrences ~ Year + Ecosystem))
+
+# Call:
+# lm(formula = NumOccurrences ~ Year + Ecosystem, data = data4lm)
+# 
+# Residuals:
+#   Min     1Q Median     3Q    Max 
+# -29044  -7075   -977   3725  51184 
+# 
+# Coefficients:
+#                          Estimate Std. Error t value Pr(>|t|)    
+#   (Intercept)          -5955795.3   854024.1  -6.974 2.33e-08 ***
+#   Year                     2978.3      424.9   7.010 2.08e-08 ***
+#   EcosystemNonCropland    -4252.3     5145.6  -0.826    0.414    
+# ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 16670 on 39 degrees of freedom
+# Multiple R-squared:  0.5609,	Adjusted R-squared:  0.5384 
+# F-statistic: 24.91 on 2 and 39 DF,  p-value: 1.071e-07
+
+
+# Year is significant, meaning that the number of occurrences increase with time
+# The type of ecosystesm (Cropland/NonCropland) has no statistically significant effect,
+# meaning that the growth of occurrences is the same along the time series for both
+
+
+
+## Sensitive species
+
+data4lm_1 <- data2plot_10km_1_all_2plot_2[SpeciesSensitivity == "Sensitive Species"]
+
+anova(lm(NumOccurrences ~ Year + Ecosystem, data = data4lm_1), lm(NumOccurrences ~ Year * Ecosystem, data = data4lm_1))
+#Analysis of Variance Table
+#
+#Model 1: NumOccurrences ~ Year + Ecosystem
+#Model 2: NumOccurrences ~ Year * Ecosystem
+#Res.Df     RSS Df Sum of Sq      F  Pr(>F)  
+#1     39 1914804                              
+#2     38 1661543  1    253262 5.7922 0.02107 *
+#  ---
+#  Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+# The interaction Year*Ecosystem is significant, we keep it in the model
+
+
+summary(lm(data = data4lm_1, NumOccurrences ~ Year*Ecosystem))
+# Call:
+# lm(formula = NumOccurrences ~ Year * Ecosystem, data = data4lm_1)
+# 
+# Residuals:
+#   Min      1Q  Median      3Q     Max 
+# -309.86  -33.97  -11.19   17.95 1030.66 
+# 
+# Coefficients:
+#                             Estimate Std. Error t value Pr(>|t|)  
+# (Intercept)                -7484.584  15146.651  -0.494   0.6241  
+# Year                           3.734      7.536   0.495   0.6231  
+# EcosystemNonCropland      -51324.061  21420.599  -2.396   0.0216 *
+# Year:EcosystemNonCropland     25.648     10.657   2.407   0.0211 *
+#   ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 209.1 on 38 degrees of freedom
+# Multiple R-squared:  0.4241,	Adjusted R-squared:  0.3787 
+# F-statistic:  9.33 on 3 and 38 DF,  p-value: 9.419e-05
+
+
+# The Year has no significant effect on the growth of the occurrences reported in Croplands (reference term),
+# The effect of ecosystem type (Cropland/Non-Cropland) is statistically significant,
+# (the slope of both lines are significantly different), meaning that the occurrences growth of 
+# sensitive species in Croplands is significantly lower than in Non-Croplands
+
+
+# if we change the reference term
+data4lm_1$Ecosystem <- factor(data4lm_1$Ecosystem)
+summary(lm(data = data4lm_1, NumOccurrences ~ Year*relevel(Ecosystem, ref = "NonCropland")))
+
+# Call:
+# lm(formula = NumOccurrences ~ Year * relevel(Ecosystem, ref = "NonCropland"), 
+#    data = data4lm_1)
+# 
+# Residuals:
+#   Min      1Q  Median      3Q     Max 
+# -309.86  -33.97  -11.19   17.95 1030.66 
+# 
+# Coefficients:
+#                                                          Estimate Std. Error t value Pr(>|t|)    
+#   (Intercept)                                          -58808.645  15146.651  -3.883 0.000399 ***
+#   Year                                                     29.382      7.536   3.899 0.000381 ***
+#   relevel(Ecosystem, ref = "NonCropland")Cropland       51324.061  21420.599   2.396 0.021604 *  
+#   Year:relevel(Ecosystem, ref = "NonCropland")Cropland    -25.648     10.657  -2.407 0.021065 *  
+#   ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 209.1 on 38 degrees of freedom
+# Multiple R-squared:  0.4241,	Adjusted R-squared:  0.3787 
+# F-statistic:  9.33 on 3 and 38 DF,  p-value: 9.419e-05
+
+# Year is significant for the Non-Cropland line, and the differences between slopes are significant too
+
+
+
+## Sensitive vs. Non-sensitive species in Cropland areas
+
+data4lm_2 <- data2plot_10km_1_all_2plot_2[Ecosystem == "Cropland"]
+summary(lm(data = data4lm_2, NumOccurrences ~ Year*SpeciesSensitivity))
+
+# Call:
+# lm(formula = NumOccurrences ~ Year * SpeciesSensitivity, data = data4lm_2)
+# 
+# Residuals:
+#   Min     1Q Median     3Q    Max 
+# -28147  -2781    -11     34  34986 
+# 
+# Coefficients:
+#                                              Estimate Std. Error t value Pr(>|t|)    
+#   (Intercept)                              -5655343.4   861956.1  -6.561 9.71e-08 ***
+#   Year                                         2828.8      428.8   6.597 8.69e-08 ***
+#   SpeciesSensitivitySensitive Species       5647858.8  1218990.0   4.633 4.15e-05 ***
+#   Year:SpeciesSensitivitySensitive Species    -2825.1      606.5  -4.658 3.84e-05 ***
+#   ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 11900 on 38 degrees of freedom
+# Multiple R-squared:  0.7482,	Adjusted R-squared:  0.7283 
+# F-statistic: 37.63 on 3 and 38 DF,  p-value: 1.826e-11
+
+
+# Differences in growth between Sensitive and Non-Sensitive species in Croplands are significant
+# This corroborates the sensitiveness of this group of species to agriculture
+
+
+
+## Sensitive vs. Non-sensitive species in Non-Cropland areas
+
+data4lm_3 <- data2plot_10km_1_all_2plot_2[Ecosystem == "NonCropland"]
+summary(lm(data = data4lm_3, NumOccurrences ~ Year*SpeciesSensitivity))
+
+# Call:
+#lm(formula = NumOccurrences ~ Year * SpeciesSensitivity, data = data4lm_3)
+#
+# Residuals:
+#   Min     1Q Median     3Q    Max 
+# -24083   -310    -24    846  49838 
+# 
+# Coefficients:
+#   Estimate Std. Error t value Pr(>|t|)    
+# (Intercept)                              -6260499.5   865793.2  -7.231 1.20e-08 ***
+#   Year                                         3127.8      430.7   7.261 1.09e-08 ***
+#   SpeciesSensitivitySensitive Species       6201690.9  1224416.5   5.065 1.08e-05 ***
+#   Year:SpeciesSensitivitySensitive Species    -3098.4      609.2  -5.086 1.01e-05 ***
+#   ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 11950 on 38 degrees of freedom
+# Multiple R-squared:  0.7302,	Adjusted R-squared:  0.7089 
+# F-statistic: 34.28 on 3 and 38 DF,  p-value: 6.705e-11
+
+
 
 
 
