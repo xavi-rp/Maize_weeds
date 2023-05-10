@@ -13,7 +13,11 @@ library(ggpubr)
 library(viridis)
 library(tidyverse)
 library(gridExtra)
-
+library(ggvenn)
+library(reshape2)
+library(forcats)
+library(viridis)
+library(scales)
 
 
 
@@ -80,6 +84,7 @@ writeRaster(cropmap2018_maiz_1km, "cropmap2018_maiz_1km.tif", overwrite = TRUE)
 
 cropmap2018_maiz_1km <- raster("cropmap2018_maiz_1km.tif")
 
+sum(!is.na(getValues(cropmap2018_maiz_1km[["cropmap2018_maiz_1km"]])))  # 4285358 cells with maize
 
 
 ## 10km
@@ -188,37 +193,19 @@ cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
                                        fun = aggr_ArabLand_10km, 
                                        expand = TRUE, 
                                        na.rm = TRUE, 
-                                       #filename = "cropmap2018_ArableLand_10km_new.tif",
-                                       filename = "",
+                                       filename = "cropmap2018_ArableLand_10km_new.tif",
+                                       #filename = "",
                                        overwrite = TRUE)
 
-#cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km.tif")
 cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km_new.tif")
 names(cropmap2018_arabland_10km)
 plot(cropmap2018_arabland_10km)
 
 
-## recall cropmap2018_arabland_10km from Raph's data set
-library(RPostgreSQL)
-pg <- list(host = 'jeodb01.cidsn.jrc.it', port = '54331', # PG server parameters
-           user = 'refocus_eucropmap_user', pwd = '8gsmuTJUj2xKrHbf',
-           db = 'refocus_eucropmap_db')
-con <- dbDriver("PostgreSQL") %>% # connect
-  dbConnect(host=pg$host, port=pg$port, user=pg$user, password=pg$pwd, dbname=pg$db)
-
-tmp <- paste0("SELECT * FROM \"cdiv\".","crop_div_10km_geom AS a")
-cropmap2018_arabland_10km <- st_read(con, query = tmp)
-
-cropmap2018_arabland_10km
-summary(round((cropmap2018_arabland_10km$cropland_sum / 10^6), 3))
-
-plot(cropmap2018_arabland_10km)
-
 
 ## cropland vs non-cropland area
-#cropmap2018_arabland_10km_vals <- getValues(cropmap2018_arabland_10km)  
-cropmap2018_arabland_10km_vals <- round((cropmap2018_arabland_10km$cropland_sum / 10^6), 3)  
-#cropmap2018_arabland_10km_vals <- cropmap2018_arabland_10km_vals[!is.na(cropmap2018_arabland_10km_vals)]
+cropmap2018_arabland_10km_vals <- getValues(cropmap2018_arabland_10km)  
+cropmap2018_arabland_10km_vals <- cropmap2018_arabland_10km_vals[!is.na(cropmap2018_arabland_10km_vals)]
 
 (sum(cropmap2018_arabland_10km_vals < 0.2) * 100) / length(cropmap2018_arabland_10km_vals) 
 (sum(cropmap2018_arabland_10km_vals >= 0.2) * 100) / length(cropmap2018_arabland_10km_vals)
@@ -333,7 +320,6 @@ comp_df <- comp_df[, .SD, .SDcols = c("getValues.Absolute_intensity_5_clas_Fig3A
 # Pearson's correlation coefficient
 comp_df_pearson <- cor(comp_df, method = "pearson")[2, 1]
 comp_df_pearson
-comp_df_pearson^2  # if we fit a linear regression (see below), this is R^2 (R squared)
 
 
 ## Plotting boxplots, instead of scatterplot
@@ -431,9 +417,13 @@ sum(!weeds_maize$Species %in% occs_2018_specie)   # 53 sp (maize weeds) which we
 weeds_maiz_gbib <- sort(weeds_maize$Species[weeds_maize$Species %in% occs_2018_specie])
 weeds_maiz_not_gbib <- sort(weeds_maize$Species[!weeds_maize$Species %in% occs_2018_specie])
 
+# occurrences from GBIF for all years 
+occs_all_maiz <- occs_all[occs_all$species %in% weeds_maize$Species, ]
+nrow(occs_all_maiz)   # 2082796 occurrences
+length(unique(occs_all_maiz$species))   # of 156 species, out of the 204 maize weeds
+sort(unique(occs_all_maiz$year))   # 2000-2021
 
 occs_all_2018_maiz <- occs_all_2018[occs_all_2018$species %in% weeds_maiz_gbib, ]
-
 nrow(occs_all_2018_maiz)   # 158427 occurrences for 2018
 nrow(occs_all_2018)        # over 1591221 in total for 2018
 occs_all_2018_maiz
@@ -523,8 +513,8 @@ png("scatterplot_SpRichness_Arable_1.png",
 ggplot(occs_maizeShare_1, aes(cropmap2018_arabland_1km, N)) +
   geom_hex(bins = 50) +
   geom_smooth(method = "lm", col = "red") +
-  stat_cor(method = "pearson", label.x = .50, label.y = 25) +
-  labs(x = "Cropland share", y = "Species richness") +
+  stat_cor(method = "pearson", label.x = .70, label.y = 25) +
+  labs(x = "Arable land share", y = "Species richness") +
   theme_bw() +
   theme(axis.title = element_text(size = 14),
         axis.text = element_text(size = 12)) 
@@ -562,6 +552,9 @@ dev.off()
 
 cropmap2018_maiz_1km
 occs_maizeShare
+
+occs_maizeShare <- merge(occs_maizeShare, occs_maizeShare_1[, .SD, .SDcols = c("cells", "N", "maize_share_class")],
+                         by = "cells", all.x = TRUE)
 
 spRichness_sf <- st_set_geometry(occs_maizeShare[!duplicated(occs_maizeShare$cells)], value = "geometry")
 
@@ -620,7 +613,6 @@ dev.off()
 
 ## Finding weeds potentially indicators of low intensification ####
 ## Grouping by 10 classes of maize share 
-occs_maizeShare <- merge(occs_maizeShare, occs_maizeShare_1[, .SD, .SDcols = c("cells", "N", "maize_share_class")], by = "cells", all.x = TRUE)
 fwrite(occs_maizeShare, file = "/eos/jeodpp/home/users/rotllxa/weeds/occs_maizeShare.csv", row.names = FALSE, quote = TRUE)
 occs_maizeShare <- fread("/eos/jeodpp/home/users/rotllxa/weeds/occs_maizeShare.csv", header = TRUE)
 
@@ -716,7 +708,7 @@ sp_01[
     !sp_01 %in% c(sp_09)
 ]
 
-# These are the () species that are only found in group 1 and 0: 
+# These are the species that are only found in group 1 and 0: 
 #"Atriplex patula"   "Brassica nigra"    "Eclipta prostrata" "Rumex pulcher"   
 #"Senecio vernalis"  "Silene noctiflora"  "Veronica agrestis"
 
@@ -791,8 +783,6 @@ dev.off()
 
 
 # Venn diagram
-library(ggvenn)
-
 png("VennDiagr_3_IndicatorSp.png",
     width = 20, height = 20, units = "cm", res = 150)
 
@@ -805,13 +795,9 @@ dev.off()
 
 
 # Heatmap:
-library(reshape2)
 sps_groups_df <- melt(sps_groups)
 names(sps_groups_df) <- c("Species", "Maize_share")
 head(sps_groups_df)
-
-library(forcats)
-library(tidyverse)
 
 jpeg("heatmap_IndicatorSp_2.jpg",
      units = "cm",
@@ -834,7 +820,7 @@ dev.off()
 occs_00_indicators
 occs_all
 
-occs_all_indic_allYears <- occs_all[species %in% occs_00_indicators$Var1]
+occs_all_indic_allYears <- occs_all[species %in% names(occs_00_indicators)]
 occs_all_indic_allYears
 
 occs2plot <- occs_all_indic_allYears %>% 
@@ -844,7 +830,7 @@ occs2plot <- occs_all_indic_allYears %>%
 
 occs2plot
 occs2plot$year <- as.factor(occs2plot$year)
-occs2plot$species <- factor(occs2plot$species, levels = occs_00_indicators$Var1)
+occs2plot$species <- factor(occs2plot$species, levels = names(occs_00_indicators))
 str(occs2plot)
 
 
@@ -879,7 +865,7 @@ occs_all_indic_country <- occs_all_indic_allYears %>%
 occs_all_indic_country
 
 
-occs_all_indic_country$species <- factor(occs_all_indic_country$species, levels = occs_00_indicators$Var1)
+occs_all_indic_country$species <- factor(occs_all_indic_country$species, levels = names(occs_00_indicators))
 
 jpeg("NumOccurrencesIndicCountry.jpg", width = 25, height = 25, units = "cm", res = 150)
 
@@ -897,7 +883,7 @@ dev.off()
 
 
 
-## Mapping against Cropland share
+### Mapping against Arable land share ####
 
 occs_all_indic_allYears
 #cropmap2018_arabland_1km <- raster("cropmap2018_ArableLand_1km.tif")
@@ -918,17 +904,25 @@ occs_all_indic_allYears_arable1km <- as.data.table(raster::extract(cropmap2018_a
 occs_all_indic_allYears_arable1km
 
 
-## Cropland: 10 km
-#occs_all_indic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
-#                                                                    occs_all_indic_allYears_sf,
-#                                                                    sp = TRUE))
+## Arable land: 10 km
 
-cropmap2018_arabland_10km <- cropmap2018_arabland_10km["cropland_sum"]
+if(is.data.frame(cropmap2018_arabland_10km)){
+  cropmap2018_arabland_10km <- cropmap2018_arabland_10km["cropland_sum"]
+  names(cropmap2018_arabland_10km)[1] <- "cropmap2018_arabland_10km"
+  occs_all_indic_allYears_sf <- st_transform(occs_all_indic_allYears_sf,
+                                             crs = st_crs(cropmap2018_arabland_10km))
+  occs_all_indic_allYears_arable10km <- as.data.table(st_intersection(cropmap2018_arabland_10km["cropmap2018_arabland_10km"],
+                                                                      occs_all_indic_allYears_sf))
+  
+  occs_all_indic_allYears_arable10km[, cropmap2018_ArableLand_10km := round((cropmap2018_arabland_10km/10^6), 3)]
+  
+} else {
+  occs_all_indic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
+                                                                      occs_all_indic_allYears_sf,
+                                                                      sp = TRUE))
+}
 
-occs_all_indic_allYears_arable10km <- as.data.table(st_intersection(cropmap2018_arabland_10km["cropland_sum"],
-                                                                    occs_all_indic_allYears_sf))
 
-occs_all_indic_allYears_arable10km[, cropmap2018_ArableLand_10km := round((cropland_sum/10^6), 3)]
 
 
 data2plot_10km <- occs_all_indic_allYears_arable10km[cropmap2018_ArableLand_10km >= 0.2] %>% 
@@ -955,40 +949,13 @@ ggplot(data2plot_10km[year < 2021],
 data2plot_10km_1 <- occs_all_indic_allYears_arable10km %>% 
   filter(year < 2021) %>%  
   group_by(year) %>%
-  summarise(Occurrences_Cropland = sum(cropmap2018_ArableLand_10km >= 0.2, na.rm = TRUE), 
-            Occurrences_NonCropland = sum(cropmap2018_ArableLand_10km < 0.2, na.rm = TRUE)) %>%
+  summarise(Occurrences_Arableland = sum(cropmap2018_ArableLand_10km >= 0.2, na.rm = TRUE), 
+            Occurrences_NonArableland = sum(cropmap2018_ArableLand_10km < 0.2, na.rm = TRUE)) %>%
   pivot_longer(!year, names_to = "Occurrences") %>%
   data.table()
 
 data2plot_10km_1
 
-
-#plot1 <- ggplot(data2plot_10km_1, 
-#       aes(x = year, y = value, color = Occurrences)) + 
-#  geom_point() + 
-#  stat_smooth(method = 'lm', se = FALSE) +
-#  theme_bw() +
-#  scale_color_viridis(option = "viridis", discrete = TRUE, end = 0.7) +
-#  theme(strip.text = element_text(face = "italic"),
-#        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1)) +
-#  labs(x = "Year", y = "log(Number of occurrences)")
-#
-#plot2 <- ggplot(data2plot_10km_1, 
-#       aes(x = year, y = value, color = Occurrences)) + 
-#  geom_point() + 
-#  scale_y_log10() +
-#  stat_smooth(method = 'lm', se = FALSE) +
-#  theme_bw() +
-#  scale_color_viridis(option = "viridis", discrete = TRUE, end = 0.7) +
-#  theme(strip.text = element_text(face = "italic"),
-#        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1)) +
-#  labs(x = "Year", y = "log(Number of occurrences)")
-#
-#
-#grid.arrange(plot1, plot2, ncol=2)
-
-
-#
 
 
 ## For the non-indicator species (25 selected for the previous analysis)
@@ -997,7 +964,7 @@ sp_indic_1
 occs_00_indicators
 occs_all
 
-sps_nonIndic <- sp_indic_1[!sp_indic_1 %in% occs_00_indicators$Var1]
+sps_nonIndic <- sp_indic_1[!sp_indic_1 %in% names(occs_00_indicators)]
 
 occs_all_nonIndic_allYears <- occs_all[species %in% sps_nonIndic]
 
@@ -1008,20 +975,30 @@ occs_all_nonIndic_allYears_sf <- st_as_sf(as.data.frame(occs_all_nonIndic_allYea
 occs_all_nonIndic_allYears_sf <- st_transform(occs_all_nonIndic_allYears_sf,
                                               crs = st_crs(cropmap2018_arabland_10km))
 
-#occs_all_nonIndic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
-#                                                                       occs_all_nonIndic_allYears_sf,
-#                                                                       sp = TRUE))
-occs_all_nonIndic_allYears_arable10km <- as.data.table(st_intersection(cropmap2018_arabland_10km["cropland_sum"],
-                                                                    occs_all_nonIndic_allYears_sf))
 
-occs_all_nonIndic_allYears_arable10km[, cropmap2018_ArableLand_10km := round((cropland_sum/10^6), 3)]
-occs_all_nonIndic_allYears_arable10km
+
+
+if(is.data.frame(cropmap2018_arabland_10km)){
+  occs_all_nonIndic_allYears_sf <- st_transform(occs_all_nonIndic_allYears_sf,
+                                                crs = st_crs(cropmap2018_arabland_10km))
+  occs_all_nonIndic_allYears_arable10km <- as.data.table(st_intersection(cropmap2018_arabland_10km["cropmap2018_arabland_10km"],
+                                                                         occs_all_nonIndic_allYears_sf))
+  
+  occs_all_nonIndic_allYears_arable10km[, cropmap2018_ArableLand_10km := round((cropmap2018_arabland_10km/10^6), 3)]
+
+} else {
+  occs_all_nonIndic_allYears_arable10km <- as.data.table(raster::extract(cropmap2018_arabland_10km,
+                                                                         occs_all_nonIndic_allYears_sf,
+                                                                         sp = TRUE))
+}
+
+
 
 data2plot_10km_1_nonIndic <- occs_all_nonIndic_allYears_arable10km %>% 
   filter(year < 2021) %>%  
   group_by(year) %>%
-  summarise(Occurrences_Cropland = sum(cropmap2018_ArableLand_10km >= 0.2, na.rm = TRUE), 
-            Occurrences_NonCropland = sum(cropmap2018_ArableLand_10km < 0.2, na.rm = TRUE)) %>%
+  summarise(Occurrences_Arableland = sum(cropmap2018_ArableLand_10km >= 0.2, na.rm = TRUE), 
+            Occurrences_NonArableland = sum(cropmap2018_ArableLand_10km < 0.2, na.rm = TRUE)) %>%
   pivot_longer(!year, names_to = "Occurrences") %>%
   data.table()
 
@@ -1066,7 +1043,7 @@ p1 <- ggplot(data2plot_10km_1_all_2plot_2,
     after_stat(rr.label),
     after_stat(p.value.label), sep = "*\", \"*"))) +
   theme_bw() +
-  scale_color_manual(labels = c("Cropland", "Non-Cropland"), values = viridis(10)[c(1,7)]) +
+  scale_color_manual(labels = c("Arable land", "Non-Arable land"), values = viridis(10)[c(1,7)]) +
   facet_wrap(~ Indic_NonIndic, nrow = 2, ncol = 1
              , scales = "free_y") + 
   theme(strip.text = element_text(face = "italic"),
@@ -1082,7 +1059,7 @@ p2 <- ggplot(data2plot_10km_1_all_2plot_2,
     after_stat(rr.label),
     after_stat(p.value.label), sep = "*\", \"*"))) +
   theme_bw() +
-  scale_color_manual(labels = c("Cropland", "Non-Cropland"), values = viridis(10)[c(1,7)]) +
+  scale_color_manual(labels = c("Arable land", "Non-Arable land"), values = viridis(10)[c(1,7)]) +
   facet_wrap(~ Indic_NonIndic, nrow = 2, ncol = 1
              , scales = "free_y") + 
   theme(strip.text = element_text(face = "italic"),
@@ -1091,7 +1068,7 @@ p2 <- ggplot(data2plot_10km_1_all_2plot_2,
 
 
 jpeg("NumOccurrences_IndicNonIndic_TimeSeries_tendencyLog_2_R2_kk.jpg", width = 30, height = 20, units = "cm", res = 300)
-grid.arrange(p1, p2, ncol=2)
+grid.arrange(p1, p2, ncol = 2)
 dev.off()
 
 
@@ -1101,7 +1078,7 @@ dev.off()
 
 
 
-### Slope differences
+### Slope differences ####
 
 data2plot_10km_1_all_2plot_2
 setnames(data2plot_10km_1_all_2plot_2, 
@@ -1123,11 +1100,11 @@ data4lm <- data2plot_10km_1_all_2plot_2[SpeciesSensitivity == "Non Sensitive Spe
 #  facet_wrap(~ Ecosystem, nrow = 1, ncol = 2) 
 
 
-summary(lm(data = data4lm[Ecosystem == "Cropland"], Year ~ log10(NumOccurrences)))
-summary(lm(data = data4lm[Ecosystem == "Cropland"], NumOccurrences ~ Year))  # Adjusted R-squared:  0.5093 
+summary(lm(data = data4lm[Ecosystem == "Arableland"], Year ~ log10(NumOccurrences)))
+summary(lm(data = data4lm[Ecosystem == "Arableland"], NumOccurrences ~ Year))  # Adjusted R-squared:  0.5093 
                                                                              # p-value: 0.0001689
 
-summary(lm(data = data4lm[Ecosystem == "NonCropland"], Year ~ NumOccurrences))  # Adjusted R-squared:  0.5592 
+summary(lm(data = data4lm[Ecosystem == "NonArableland"], Year ~ NumOccurrences))  # Adjusted R-squared:  0.5592 
                                                                                 # p-value: 5.881e-05
 
 
@@ -1167,7 +1144,7 @@ summary(lm(data = data4lm, NumOccurrences ~ Year + Ecosystem))
 
 
 # Year is significant, meaning that the number of occurrences increase with time
-# The type of ecosystesm (Cropland/NonCropland) has no statistically significant effect,
+# The type of ecosystesm (Arable/NonArableland) has no statistically significant effect,
 # meaning that the growth of occurrences is the same along the time series for both
 
 
@@ -1202,8 +1179,8 @@ summary(lm(data = data4lm_1, NumOccurrences ~ Year*Ecosystem))
 #                             Estimate Std. Error t value Pr(>|t|)  
 # (Intercept)                -7484.584  15146.651  -0.494   0.6241  
 # Year                           3.734      7.536   0.495   0.6231  
-# EcosystemNonCropland      -51324.061  21420.599  -2.396   0.0216 *
-# Year:EcosystemNonCropland     25.648     10.657   2.407   0.0211 *
+# EcosystemNonArableland      -51324.061  21420.599  -2.396   0.0216 *
+# Year:EcosystemNonArableland     25.648     10.657   2.407   0.0211 *
 #   ---
 #   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 # 
@@ -1212,15 +1189,15 @@ summary(lm(data = data4lm_1, NumOccurrences ~ Year*Ecosystem))
 # F-statistic:  9.33 on 3 and 38 DF,  p-value: 9.419e-05
 
 
-# The Year has no significant effect on the growth of the occurrences reported in Croplands (reference term),
-# The effect of ecosystem type (Cropland/Non-Cropland) is statistically significant,
+# The Year has no significant effect on the growth of the occurrences reported in Arable land (reference term),
+# The effect of ecosystem type (Arableland/Non-Arableland) is statistically significant,
 # (the slope of both lines are significantly different), meaning that the occurrences growth of 
-# sensitive species in Croplands is significantly lower than in Non-Croplands
+# sensitive species in Arable land is significantly lower than in Non-Arable land
 
 
 # if we change the reference term
 data4lm_1$Ecosystem <- factor(data4lm_1$Ecosystem)
-summary(lm(data = data4lm_1, NumOccurrences ~ Year*relevel(Ecosystem, ref = "NonCropland")))
+summary(lm(data = data4lm_1, NumOccurrences ~ Year*relevel(Ecosystem, ref = "NonArableland")))
 
 # Call:
 # lm(formula = NumOccurrences ~ Year * relevel(Ecosystem, ref = "NonCropland"), 
@@ -1234,8 +1211,8 @@ summary(lm(data = data4lm_1, NumOccurrences ~ Year*relevel(Ecosystem, ref = "Non
 #                                                          Estimate Std. Error t value Pr(>|t|)    
 #   (Intercept)                                          -58808.645  15146.651  -3.883 0.000399 ***
 #   Year                                                     29.382      7.536   3.899 0.000381 ***
-#   relevel(Ecosystem, ref = "NonCropland")Cropland       51324.061  21420.599   2.396 0.021604 *  
-#   Year:relevel(Ecosystem, ref = "NonCropland")Cropland    -25.648     10.657  -2.407 0.021065 *  
+#   relevel(Ecosystem, ref = "NonArableland")Arableland       51324.061  21420.599   2.396 0.021604 *  
+#   Year:relevel(Ecosystem, ref = "NonArableland")Arableland    -25.648     10.657  -2.407 0.021065 *  
 #   ---
 #   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 # 
@@ -1243,13 +1220,13 @@ summary(lm(data = data4lm_1, NumOccurrences ~ Year*relevel(Ecosystem, ref = "Non
 # Multiple R-squared:  0.4241,	Adjusted R-squared:  0.3787 
 # F-statistic:  9.33 on 3 and 38 DF,  p-value: 9.419e-05
 
-# Year is significant for the Non-Cropland line, and the differences between slopes are significant too
+# Year is significant for the Non-Arable land line, and the differences between slopes are significant too
 
 
 
 ## Sensitive vs. Non-sensitive species in Cropland areas
 
-data4lm_2 <- data2plot_10km_1_all_2plot_2[Ecosystem == "Cropland"]
+data4lm_2 <- data2plot_10km_1_all_2plot_2[Ecosystem == "Arableland"]
 summary(lm(data = data4lm_2, NumOccurrences ~ Year*SpeciesSensitivity))
 
 # Call:
@@ -1273,14 +1250,14 @@ summary(lm(data = data4lm_2, NumOccurrences ~ Year*SpeciesSensitivity))
 # F-statistic: 37.63 on 3 and 38 DF,  p-value: 1.826e-11
 
 
-# Differences in growth between Sensitive and Non-Sensitive species in Croplands are significant
+# Differences in growth between Sensitive and Non-Sensitive species in Arable land are significant
 # This corroborates the sensitiveness of this group of species to agriculture
 
 
 
 ## Sensitive vs. Non-sensitive species in Non-Cropland areas
 
-data4lm_3 <- data2plot_10km_1_all_2plot_2[Ecosystem == "NonCropland"]
+data4lm_3 <- data2plot_10km_1_all_2plot_2[Ecosystem == "NonArableland"]
 summary(lm(data = data4lm_3, NumOccurrences ~ Year*SpeciesSensitivity))
 
 # Call:
@@ -1306,15 +1283,12 @@ summary(lm(data = data4lm_3, NumOccurrences ~ Year*SpeciesSensitivity))
 
 
 
-
-
-
 ## Tolerance to maize and cropland shares ####
 
 sps_nonIndic 
 sp_indic_1 <- names(occs_00_indicators)
 
-sp_indic_1 <- c(sp_indic_1, sp_NoIndic)  # all maize weeds; first, indicator sp
+sp_indic_1 <- c(sp_indic_1, sps_nonIndic)  # all maize weeds; first, indicator sp
 save(sp_indic_1, file = "sp_indic_1.RData")
 #load("sp_indic_1.RData", verbose = TRUE)
 
@@ -1328,193 +1302,128 @@ occs_maizeShare4plotting <- occs_maizeShare4plotting %>%
 occs_maizeShare4plotting$species <- factor(occs_maizeShare4plotting$species, levels = sp_indic_1)
 occs_maizeShare4plotting
 
-
-#library("RColorBrewer")
-#display.brewer.pal(n = length(unique(dist2maize_1$species)), name = 'RdBu')
-
-library("viridis")
-library("scales")
 colrs <- viridis_pal()(length(unique(occs_maizeShare4plotting$species)))
-#colrs <- viridis_pal()(2)
-#show_col(colrs)
-#my_colrs <- ifelse(levels(dist2maize_1$species) %in% sps[1:4], colrs[1],
-#                   colrs[2])
+
 
 ## Plotting only maize and arable shares (no distance to the closest field)
 
 jpeg(paste0("distance2maize_", "all_37sp_onlyShares_1", ".jpg"), width = 31, height = 27, units = "cm", res = 300)
-#par(mfrow = c(2, 2), mar = c(2, 5, 2, 2))
 par(mar = c(2, 5, 2, 2))
 layout(matrix(c(1, 2, 3, 3), 2, 2, byrow = TRUE),
        heights = c(2, 1))
 
 
 boxplot(occs_maizeShare4plotting$cropmap2018_maiz_1km  ~ occs_maizeShare4plotting$species, 
-        #ylim = c(0, 0.2),
         ylim = c(0, 0.4),
         col = colrs,
         main = "",
         xlab = "", 
         ylab = "Share of maize (1km grid)",
         xaxt = 'n', 
-        #at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
         at = c(1:12, 14:38),
         cex.lab = 1.4,
         ann = TRUE)
 mtext("Sensitive Species           Non-sensitive Species", side = 3, at = 17, cex = 1.2)
-#axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
 axis(1, cex.axis = 0.9, at = c(1:12, 14:38), labels = 1:length(sp_indic_1), las = 2)
 
 
 boxplot(occs_maizeShare4plotting$cropmap2018_arabland_1km ~ occs_maizeShare4plotting$species, 
-        #ylim = c(0, 1),
-        #ylim = c(0, 1),
         col = colrs,
         main = "",
         xlab = "", 
-        ylab = "Share of cropland (1km grid)",
+        ylab = "Share of arable land (1km grid)",
         xaxt = 'n', 
-        #at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)),
         at = c(1:12, 14:38),
         cex.lab = 1.4,
         ann = TRUE)
 mtext("Sensitive Species           Non-sensitive Species", side = 3, at = 17, cex = 1.2)
-#axis(1, cex.axis = 0.7, at = c(1:(length(sps)/2), ((length(sps)/2)+2):(length(sps)+1)), labels = 1:length(sps), las = 2)
 axis(1, cex.axis = 0.9, at = c(1:12, 14:38), labels = 1:length(sp_indic_1), las = 2)
 
 
 plot(0, col = "white", bty = "n", axes = FALSE, ann = FALSE)
 legend("center", 
-       #legend = c("Sensitive species","Non Sensitive sps."), 
        legend = paste0(1:length(sp_indic_1), "-", levels(occs_maizeShare4plotting$species)), 
        col = c(colrs),
        ncol = 3,
        bty = "n", 
        pch = 20 , pt.cex = 3, cex = 1.3, 
-       horiz = FALSE)#, 
-#inset = - 1)
+       horiz = FALSE)
 
 dev.off()
 
 
 
 
-## Some results for reporting
+### Some results for reporting ####
 
-sp_indic_1_occs <- as.data.table(table(dist2maize$species))
-sp_indic_1_occs_1 <- as.data.table(table(occs_all_2018[species %in% sp_indic_1, ]$species))
-sp_indic_1_occs <- merge(sp_indic_1_occs, sp_indic_1_occs_1, by = "V1")
-names(sp_indic_1_occs) <- c("species", "Used_occurrences", "GBIF_occurrences")
-sp_indic_1_occs <- sp_indic_1_occs[sp_indic_1, c(1, 3, 2)]
-sp_indic_1_occs
-View(sp_indic_1_occs)
+occs_maizeShare4plotting
+sps_nonIndic 
+names(occs_00_indicators)
 
+# Share of maize
+# Non-sensitive
+length(unique(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$species))
+range(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$cropmap2018_maiz_1km)
+round(mean(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$cropmap2018_maiz_1km), 3) # 0.106
+round(sd(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$cropmap2018_maiz_1km), 3)   # 0.108
+round(max(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$cropmap2018_maiz_1km), 3)  # 0.84
 
+# Sensitive
+length(unique(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$species))
+range(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$cropmap2018_maiz_1km)
+round(mean(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$cropmap2018_maiz_1km), 3) # 0.029
+round(sd(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$cropmap2018_maiz_1km), 3)   # 0.03
+round(max(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$cropmap2018_maiz_1km), 3)   # 0.097
 
+#
+# Share of Arable land
+# Non-sensitive
+length(unique(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$species))
+range(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$cropmap2018_arabland_1km)
+round(mean(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$cropmap2018_arabland_1km), 3) # 0.449
+round(sd(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$cropmap2018_arabland_1km), 3)   # 0.173
+round(max(occs_maizeShare4plotting[species %in% sps_nonIndic, ]$cropmap2018_arabland_1km), 3)  # 0.996
 
-dist2maize
+# Sensitive
+length(unique(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$species))
+range(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$cropmap2018_arabland_1km)
+round(mean(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$cropmap2018_arabland_1km), 3) # 0.447
+round(sd(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$cropmap2018_arabland_1km), 3)   # 0.214
+round(max(occs_maizeShare4plotting[!species %in% sps_nonIndic, ]$cropmap2018_arabland_1km), 3)   # 0.865
 
-sp_NoIndic <- sp_indic_1_occs$species[13:length(sps)]
-
-dist2maize_indicators <- dist2maize[!species %in% sp_NoIndic, ]
-unique(dist2maize_indicators$species)
-
-dist2maize_no_indicators <- dist2maize[species %in% sp_NoIndic, ]
-unique(dist2maize_no_indicators$species)
-
-
-names(dist2maize_indicators)
-
-sum(is.na(dist2maize_indicators$dist2maize))
-length(dist2maize_indicators$dist2maize)
-
-round(mean(dist2maize_indicators$dist2maize, na.rm = TRUE), 0)
-round(sd(dist2maize_indicators$dist2maize, na.rm = TRUE), 0)
-round(mean(dist2maize_indicators$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_indicators$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(range(dist2maize_indicators$cropmap2018_maiz_1km), 2)
-round(mean(dist2maize_indicators$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_indicators$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(mean(dist2maize_indicators$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
-round(sd(dist2maize_indicators$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
-
-round(mean(dist2maize_no_indicators$dist2maize, na.rm = TRUE), 0)
-round(sd(dist2maize_no_indicators$dist2maize, na.rm = TRUE), 0)
-round(mean(dist2maize_no_indicators$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_no_indicators$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(range(dist2maize_no_indicators$cropmap2018_maiz_1km), 2)
-round(mean(dist2maize_no_indicators$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_no_indicators$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(mean(dist2maize_no_indicators$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
-round(sd(dist2maize_no_indicators$cropmap2018_ArableLand_10km, na.rm = TRUE), 2)
-
-
-# first 5 indicators
-#first_5 <- c("Galium tricornutum", "Digitaria ischaemum", "Xanthium spinosum", "Chrozophora tinctoria", "Caucalis platycarpos")
-first_5 <- levels(dist2maize_indicators$species)[1:6]
-
-dist2maize_5 <- dist2maize[species %in% first_5, ]
-
-round(mean(dist2maize_5$dist2maize, na.rm = TRUE), 0)
-round(sd(dist2maize_5$dist2maize, na.rm = TRUE), 0)
-round(mean(dist2maize_5$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_5$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(mean(dist2maize_5$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_5$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-
-# Galium
-dist2maize_galium <- dist2maize[species %in% c("Galium tricornutum"), ]
-round(mean(dist2maize_galium$dist2maize, na.rm = TRUE), 0)
-round(sd(dist2maize_galium$dist2maize, na.rm = TRUE), 0)
-round(mean(dist2maize_galium$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_galium$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(mean(dist2maize_galium$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_galium$cropmap2018_arabland_1km, na.rm = TRUE), 2)
+#
 
 # Tribulus terrestris
-dist2maize_tribulus <- dist2maize[species %in% c("Tribulus terrestris"), ]
-round(mean(dist2maize_tribulus$dist2maize, na.rm = TRUE), 0)
-round(sd(dist2maize_tribulus$dist2maize, na.rm = TRUE), 0)
-round(mean(dist2maize_tribulus$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_tribulus$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(mean(dist2maize_tribulus$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_tribulus$cropmap2018_arabland_1km, na.rm = TRUE), 2)
+# Maize share
+unique(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$species)
+range(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$cropmap2018_maiz_1km)
+round(mean(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$cropmap2018_maiz_1km), 3) # 0.016
+round(sd(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$cropmap2018_maiz_1km), 3)   # 0.017
+round(max(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$cropmap2018_maiz_1km), 3)   # 0.053
 
-# Xanthium spinosum
-dist2maize_xanthium <- dist2maize[species %in% c("Xanthium spinosum"), ]
-round(mean(dist2maize_xanthium$dist2maize, na.rm = TRUE), 0)
-round(sd(dist2maize_xanthium$dist2maize, na.rm = TRUE), 0)
-round(mean(dist2maize_xanthium$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_xanthium$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(mean(dist2maize_xanthium$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_xanthium$cropmap2018_arabland_1km, na.rm = TRUE), 2)
+# Arable
+unique(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$species)
+range(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$cropmap2018_arabland_1km)
+round(mean(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$cropmap2018_arabland_1km), 3) # 0.514
+round(sd(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$cropmap2018_arabland_1km), 3)   # 0.224
+round(max(occs_maizeShare4plotting[species %in% "Tribulus terrestris", ]$cropmap2018_arabland_1km), 3)   # 0.852
 
 
-# Phalaris paradoxa
-dist2maize_phal_par <- dist2maize[species %in% c("Phalaris paradoxa"), ]
-round(mean(dist2maize_phal_par$dist2maize, na.rm = TRUE), 0)
-round(sd(dist2maize_phal_par$dist2maize, na.rm = TRUE), 0)
-round(mean(dist2maize_phal_par$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_phal_par$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(mean(dist2maize_phal_par$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_phal_par$cropmap2018_arabland_1km, na.rm = TRUE), 2)
+# Galium tricornutum
+# Maize share
+unique(occs_maizeShare4plotting[species %in% "Galium tricornutum", ]$species)
+length(occs_maizeShare4plotting[species %in% "Galium tricornutum", ]$species)
+range(occs_maizeShare4plotting[species %in% "Galium tricornutum", ]$cropmap2018_maiz_1km)
+round(mean(occs_maizeShare4plotting[species %in% "Galium tricornutum", ]$cropmap2018_maiz_1km), 3) # 0.031
+round(sd(occs_maizeShare4plotting[species %in% "Galium tricornutum", ]$cropmap2018_maiz_1km), 3)   # 0.039
+round(max(occs_maizeShare4plotting[species %in% "Galium tricornutum", ]$cropmap2018_maiz_1km), 3)   # 0.059
 
+# Arable
+unique(occs_maizeShare4plotting[species %in%     "Galium tricornutum", ]$species)
+range(occs_maizeShare4plotting[species %in%      "Galium tricornutum", ]$cropmap2018_arabland_1km)
+round(mean(occs_maizeShare4plotting[species %in% "Galium tricornutum", ]$cropmap2018_arabland_1km), 3) # 0.231
+round(sd(occs_maizeShare4plotting[species %in%   "Galium tricornutum", ]$cropmap2018_arabland_1km), 3)   # 0.012
+round(max(occs_maizeShare4plotting[species %in%  "Galium tricornutum", ]$cropmap2018_arabland_1km), 3)   # 0.239
 
-# More tolerant
-occs_08$Var1
-
-dist2maize_tol <- dist2maize[species %in% occs_08$Var1, ]
-round(mean(dist2maize_tol$dist2maize, na.rm = TRUE), 0)
-round(sd(dist2maize_tol$dist2maize, na.rm = TRUE), 0)
-round(mean(dist2maize_tol$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_tol$cropmap2018_maiz_1km, na.rm = TRUE), 2)
-range(dist2maize_tol$cropmap2018_maiz_1km)
-round(mean(dist2maize_tol$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-round(sd(dist2maize_tol$cropmap2018_arabland_1km, na.rm = TRUE), 2)
-range(dist2maize_tol$cropmap2018_arabland_1km)
-
-
-
-
-
+#
 

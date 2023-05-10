@@ -29,7 +29,8 @@ if(Sys.info()[4] == "D01RI1700308") {
   wd <- ""
 }else if(Sys.info()[4] == "S-JRCIPRAP320P") {
   wd <- ""
-}else if(Sys.info()[4] %in% c("jeodpp-terminal-jd001-03", 
+}else if(Sys.info()[4] %in% c("jeodpp-terminal-jd001-03",
+                              "jeodpp-terminal-jd002-03",
                               "jeodpp-terminal-03",
                               "jeodpp-terminal-dev-12")) {
   if(!dir.exists("/eos/jeodpp/home/users/rotllxa/weeds/")) 
@@ -306,7 +307,7 @@ cropmap2018_maiz_1km
 summary(cropmap2018_maiz_1km$cropmap2018_arabland_1km)
 
 
-# This need to be recalculated!!!
+
 cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
                                        fact = 1000,        # 10km
                                        fun = aggr_ArabLand_10km, 
@@ -316,7 +317,31 @@ cropmap2018_arabland_10km <- aggregate(x = cropmap2018,
                                        #filename = "",
                                        overwrite = TRUE)
 
-# This need to be recalculated!!!   cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km.tif")
+
+cropmap2018_arabland_10km <- raster("cropmap2018_ArableLand_10km.tif")
+
+
+
+## recall cropmap2018_arabland_10km from Raph's data set
+library(RPostgreSQL)
+pg <- list(host = 'jeodb01.cidsn.jrc.it', port = '54331', # PG server parameters
+           user = 'refocus_eucropmap_user', pwd = '8gsmuTJUj2xKrHbf',
+           db = 'refocus_eucropmap_db')
+con <- dbDriver("PostgreSQL") %>% # connect
+  dbConnect(host=pg$host, port=pg$port, user=pg$user, password=pg$pwd, dbname=pg$db)
+
+tmp <- paste0("SELECT * FROM \"cdiv\".","crop_div_10km_geom AS a")
+cropmap2018_arabland_10km <- st_read(con, query = tmp)
+
+cropmap2018_arabland_10km
+summary(round((cropmap2018_arabland_10km$cropland_sum / 10^6), 3))
+
+plot(cropmap2018_arabland_10km)
+
+
+cropmap2018_arabland_10km_vals <- round((cropmap2018_arabland_10km$cropland_sum / 10^6), 3)  
+
+
 
 
 ## Maize weeds ####
@@ -4768,6 +4793,24 @@ galium_all_year <- data.table(table(galium_all_1$year))
 ggplot(galium_all_year, aes(V1, N)) +
   geom_point() + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+
+
+
+
+
+## GBIF download reference ####
+
+
+txns <- c("Magnoliopsida", "Liliopsida", "Pinopsida", "Gnetopsida", "Cycadopsida", "Ginkgoopsida")
+
+for(t in txns){ 
+  print(t)
+  load(paste0("/eos/jeodpp/home/users/rotllxa/exploring_lucas_data/download_info_", t ,".RData"), verbose = FALSE)
+  print(citation_02citation_02)     
+} 
+
 
 
 
