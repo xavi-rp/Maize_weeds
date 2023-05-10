@@ -46,7 +46,9 @@ setwd(wd)
 
 ## Crop Map ####
 
-#cropmap2018 <- raster("/mnt/cidstorage/cidportal/data/OpenData/EUCROPMAP/2018/EUCROPMAP_2018.tif")  # at 10m
+# See https://data.jrc.ec.europa.eu/dataset/15f86c84-eae1-4723-8e00-c1b35c8f56b9
+# to obtain the crop map 2018 data set
+
 cropmap2018 <- raster("/scratch/rotllxa/EUCROPMAP_2018.tif")  # at 10m
 cropmap2018
 
@@ -249,9 +251,6 @@ map <- ggplot() +
   scale_fill_viridis(option = "rocket", #"plasma", 
                      discrete = TRUE, direction = -1, name = "Maize share class") 
 
-#pct <- cropmap2018_maiz_1km_map_df_1 %>% 
-#  count(msc = maize_share_class) %>% 
-#  mutate(pct = round(prop.table(n), 3))
 
 freq <- ggplot(data = cropmap2018_maiz_1km_map_df_1) + 
   geom_bar(aes(x = maize_share_class, fill = maize_share_class)) +
@@ -280,8 +279,6 @@ dev.off()
 Absolute_intensity_5_clas_Fig3A <- raster("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/Rega/Fig3A-Absolute_intensity_5_clas_.tif/Absolute_intensity_5_clas_Fig3A.tif")
 Absolute_intensity_5_clas_Fig3A
 
-#Energy_input_2008_fille04_no_labour <- raster("/eos/jeodpp/data/projects/REFOCUS/data/BIODIVERSITY/Rega/Energy_input_raw data/Energy_input_2008_fille04_no_labour.tif")
-#Energy_input_2008_fille04_no_labour
 
 
 ## maize and cropland share aggregated at 1km from the Crop Map
@@ -308,9 +305,6 @@ comp_df <- data.table(data.frame(getValues(Absolute_intensity_5_clas_Fig3A),
 comp_df <- comp_df[complete.cases(comp_df), 1:3]
 comp_df
 
-## Keeping only pixels with >= 20% of cropland... This reduces a lot the correlation!!
-#summary(comp_df$cropmap2018_arabland_1km)
-#comp_df <- comp_df[getValues.cropmap2018_arabland_1km_clean_1. >= 0.2, ]
 
 # Keeping only pixels with >= 0.2% of maize share, to remove some noise produced by the CropMap
 comp_df <- comp_df[getValues.cropmap2018_maiz_1km_clean_1. >= 0.002, ]
@@ -361,6 +355,7 @@ for(sp in weeds_maize$Species){
 }
 unique(fams)
 length(unique(fams))
+
 
 
 ## GBIF occurrences ####
